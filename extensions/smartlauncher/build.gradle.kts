@@ -18,4 +18,3 @@ tasks.register<JavaExec>("widgetTest") {
     classpath = files(widgetTestClasses)
     mainClass.set("WidgetConfigurationJvmTest")
 }
-

@@ -7,7 +7,7 @@ build tools 35.0.0, and Python 3. The top-level patches template uses JDK 21 ind
 Supply your own native OpenBubbles 2.0.0 / 20002289 base APK. Verify its SHA-256 is
 `a382a9cbef6a83288f11ed8c4763b56c5fedb24ee6505cd21b6bbb545cdc6cc0` before deriving the fixture.
 Use dex-tools 2.4 `d2j-dex2jar` against that base APK to generate a class JAR, then
-`d2j-class-version-switch --class-version 52` to produce `work/openbubbles-classes-v52.jar`.
+`d2j-class-version-switch 8 input.jar work/openbubbles-classes-v52.jar` to produce `work/openbubbles-classes-v52.jar`.
 The verified local fixture SHA-256 is `c0301f11fa889e0b4568ae5d5909a9c71ab92bef5197e1317771778781d51d92`.
 Archive byte hashes can differ if a converter embeds different ZIP timestamps; validate the original APK
 and use the same converter/options when reproducing the recorded fixture.
