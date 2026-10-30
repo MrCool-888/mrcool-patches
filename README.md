@@ -1,103 +1,66 @@
-# 👋🧩 Morphe Patches template
+# MrCool Patches
 
-Template repository for Morphe Patches.
+Private Morphe patches based on [Morphe's patches template](https://github.com/MorpheApp/morphe-patches-template).
 
-## ❓ About
-
-Patches for apps I like.
-
-<!-- TODO: Update this about section with a brief introduction/summary about this repo and what it offers. -->
-
-### How to use these patches
-
-Click the button below, or manually add this repo url to Morphe Manager: https://github.com/xyz-user/xyz-patches
-
-<a href="https://morphe.software/add-source?github=xyz-user/xyz-patches">
-  <img src=".github/assets/add-to-morphe.svg" alt="Add to Morphe" height="48">
-</a>
-
-## 🩹 Patches list
-
-<!-- PATCHES_START EXPANDED -->
-
-<!-- Do not modify this section by hand. The patch list is generated when release.yml creates a new release.
-     
-     If you wish for the patches list to be collapsed, then remove the word 'EXPANDED' from the comment tag above.
-
-     If you wish to manually keep this list updated then remove the PATCHES_START and PATCHES_END 
-     comment blocks entirely. -->
-
-#### A list of your patches will automatically be shown here after your first patches release is created.
-
-&nbsp;
-
-## 🚀 Getting development started
-
-To start using this template, follow these steps:
-
-1. [Setup](https://github.com/MorpheApp/morphe-documentation/blob/main/docs/morphe-development/README.md) your development environment including adding a GitHub PAT as described [here](https://github.com/MorpheApp/morphe-patcher/blob/main/docs/2_1_setup.md#-prepare-the-environment).
-2. [Create a new repository using this template](https://github.com/new?template_name=morphe-patches-template&template_owner=MorpheApp). Select create a new repository, and **enable 'Include all branches'** 
-3. Enable "Allow GitHub Actions to create and approve pull requests" in your repo Settings > Actions > General > Workflow permissions
-4. Update the [build.gradle.kts](patches/build.gradle.kts) file (Specifically, the 
-   [group of the project](patches/build.gradle.kts#L1), and the [About](patches/build.gradle.kts#L6-L11))
-5. Update the [README.md](README.md) file to be specific of your repo, and update the links in the [issue templates](.github/ISSUE_TEMPLATE).
-6. Choose a name for your patches project. Keep in mind you must use a name that does not 
-   imply authorship by the Morphe open source project. If unsure, then simply name these
-   patches after yourself ("UserXYZ Morphe patches"). See the [NOTICE](NOTICE) for details. 
-7. (Optional): Add `patches-bundle.png` to the project if you want a custom icon to show in
-   Morphe Manager instead of your GitHub profile avatar.
-8. (Optional): Sign your releases, so Morphe Manager refuses a release that was changed or swapped after you published it:
-   1. Run `./gradlew generateSigningKey`. It creates `morphe-signing.pub` and `morphe-signing.key`.
-   2. Commit `morphe-signing.pub`. Never commit `morphe-signing.key`, it is already ignored by git.
-   3. Add the content of `morphe-signing.key` as the `MORPHE_SIGNING_KEY` secret in your repo
-      Settings > Secrets and variables > Actions, then keep a backup of it somewhere safe and delete the file.
-
-   Every release is signed from then on. If you lose the key or it leaks, create a new one the same way;
-   users then have to confirm the new key in Morphe Manager before they get your next release.
-
-🎉 You are now ready to start creating patches!
-
-## 🧑‍💻 Dev usage
-
-To develop and release your Patches using this template:
-
-- **Make all changes to the `dev` branch.**
-- For local development work build your patches using the gradle task `./gradlew buildAndroid` to generate the mpp file found in `patches/build/libs/patches-*.mpp`. Apply your patches locally using Morphe Desktop tool like any other patch bundle.
-- Always use [Semantic commit](https://kapeli.com/cheat_sheets/Semantic_Commits.docset/Contents/Resources/Documents/index) messages for commits. To keep it simple use only 3 commit message types: 
-  - `feat: Added a new feature`
-  - `fix: Some problem now fixed`
-  - `chore: Random change you do not want in the user facing changelog`
-- Commits of `fix:` and `feat:` will automatically generate new pre-releases and `chore:` will not create a new release.
-- Users can apply your dev branch releases by enabling `pre-release` in Morphe Manager patch sources.
-- When your dev branch is ready, and you want a stable release, merge dev branch to main (do not squash, and only merge).
-- **Always use semantic release (release.yml)**. Do not manually upload or create releases by hand
-  because many files must be updated and release.yml handles everything.
-
-## 🤓 Tips
-- See the [patcher documentation](https://github.com/MorpheApp/morphe-patcher/blob/main/docs/1_patcher_intro.md) for more examples of creating patches and fingerprints.
-- Do not use AI to create new release scripts. The `release.yml` here already handles everything.
-  If you need something custom with your releases then modify the existing `release.yml`
-  and `.releaserc` instead of writing everything new from scratch.
-- Do not manually edit or manually commit any generated files such as: `patches-list.json`,
-  `patches-bundle.json`, `CHANGELOG.md`.  These files will be automatically updated by `release.yml`.
-- Do not force push any semantic release commits as that will break all future releases.
-  If you need to fix a broken release, it's always easiest to create a new release instead of 
-  fixing an existing release.
-
-
-<!-- The patches end tag is intentionally placed here so the first release will clean up 
-     this readme of all developer instructions above. -->
+<!-- PATCHES_START -->
+| Patch | Target | Purpose |
+| --- | --- | --- |
+| Wear companion bridge | OpenBubbles 2.0.0 (20002289) | Embeds the phone bridge and patch settings for the Wear OS companion. |
+| Fix Galaxy Buds3 Pro widget | Smart Launcher 6.6 build 020 | Fixes Samsung One UI 8.5 widget setup and reconfiguration. |
 <!-- PATCHES_END -->
 
-### 🛠️ Building locally
+The watch app is developed separately in [OB-wearos](https://github.com/MrCool-888/OB-wearos).
+The OpenBubbles bridge is embedded in the patched phone app; no standalone phone companion is built.
+Only Buds3 Pro has device confirmation. The launcher signature compatibility dependency is included.
 
-- Run `./gradlew buildAndroid`
-- The built patches .mpp file is found in `patches/build/libs/patches-*.mpp`
-- Patch the mpp file using [Morphe-Desktop](https://github.com/MorpheApp/morphe-desktop)
-  like any other patch bundle.
+## Build
 
-See the [Morphe documentation](https://github.com/MorpheApp/morphe-documentation) for more information.
+Use JDK 21, Python 3, and Android SDK 35. Follow Morphe's development setup for GitHub Packages
+credentials (`gpr.user` / `gpr.key`, or `GITHUB_ACTOR` / `GITHUB_TOKEN` with read:packages).
+GitHub Actions uses the template's repository-scoped token. Keep personal credentials out of this repository.
 
-## 📜 License
+```sh
+./gradlew :patches:test :extensions:smartlauncher:widgetTest :patches:buildAndroid
+```
 
-UserXYZ Patches are licensed under the [GNU General Public License v3.0](LICENSE)
+The bundle is `patches/build/libs/patches-<version>.mpp`. Apply it with Morphe Desktop/Manager.
+Because this repository is private, use an authenticated download and import the bundle locally;
+an anonymous Manager source URL cannot read this repository.
+OpenBubbles and the watch must use the same application ID and signing certificate for Wear Data Layer.
+Preserve the existing phone installation's signing key and APK format; do not uninstall or clear data.
+
+## Rebuilding the OpenBubbles extension
+
+The checked-in `openbubbles-wear.mpe` contains the bridge and its added dependencies; the payload audit
+excludes stock app classes. A source digest and artifact checksum reject stale or modified binaries.
+The original APK, derived host class fixture, signing material, and device data are not stored here.
+Changing the bridge requires a local rebuild with JDK 17 and the compile-only stock-derived fixture at
+`integrations/openbubbles/work/openbubbles-classes-v52.jar` (SHA-256
+`c0301f11fa889e0b4568ae5d5909a9c71ab92bef5197e1317771778781d51d92`).
+The fixture targets native OpenBubbles 2.0.0 / 20002289, base APK SHA-256
+`a382a9cbef6a83288f11ed8c4763b56c5fedb24ee6505cd21b6bbb545cdc6cc0`.
+It is a developer input and must remain local. See the integration README for extraction and checks.
+
+```sh
+cd integrations/openbubbles
+./gradlew :protocol:test :bridge:testDebugUnitTest :extension:test :extension:buildExtension
+python -m unittest discover -s scripts
+python verify-extension.py --refresh
+```
+
+Commit the regenerated MPE and `extension-lock.json` together with the source changes.
+
+## Development and releases
+
+Work on `dev`; `feat:` and `fix:` commits use the template's semantic release workflow.
+Merge `dev` into `main` without squashing for stable releases. Release metadata and the patch list are generated.
+The ordinary bundle build requires no stock app files or other repository checkout.
+The isolated `integrations/openbubbles` build keeps the tested bridge dependency/linkage audit.
+Its `protocol` source is the same v4 wire contract as OB-wearos; synchronize both copies when changing it.
+
+## Attribution and license
+
+GPL-3.0; see LICENSE and NOTICE. Template: MorpheApp/morphe-patches-template.
+The minimal Smart Launcher signature compatibility patch is from hoo-dles/morphe-patches
+(copyright 2026 Hoo-dles); the Buds3 widget fix was developed for this project.
+The watch application source belongs in OB-wearos, not this patch bundle.

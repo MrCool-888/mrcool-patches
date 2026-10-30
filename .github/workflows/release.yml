@@ -3,6 +3,7 @@ name: Release
 on:
   workflow_dispatch:
   push:
+  pull_request:
 
 jobs:
   release:
@@ -25,6 +26,20 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Verify bridge sources and cached extension
+        run: |
+          python integrations/openbubbles/verify-extension.py
+          python -m unittest discover -s integrations/openbubbles/scripts
+      - name: Test patches and earbuds helper
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew :patches:test :extensions:smartlauncher:widgetTest --no-daemon
+
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
@@ -39,6 +54,7 @@ jobs:
       - name: Release
         uses: cycjimmy/semantic-release-action@v8
         id: release
+        if: github.event_name != 'pull_request'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MORPHE_SIGNING_KEY: ${{ secrets.MORPHE_SIGNING_KEY }}
@@ -56,4 +72,11 @@ jobs:
         if: steps.release.outputs.new_release_published != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew :patches:buildAndroid clean --no-daemon
+        run: ./gradlew :patches:buildAndroid --no-daemon
+
+      - name: Upload verified patch bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: mrcool-patches
+          path: patches/build/libs/patches-*.mpp
+          if-no-files-found: error
