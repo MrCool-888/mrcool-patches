@@ -1,12 +1,11 @@
-group = "app.template"
+group = "app.mrcool"
 
 patches {
-    // TODO: Update this section with your project details.
     about {
-        name = "UserXYZ Patches"
-        description = "Patches for apps I like"
-        source = "git@github.com:UserXYZ/morphe-patches.git"
-        author = "Awesome dev"
+        name = "MrCool Patches"
+        description = "OpenBubbles Wear integration and Smart Launcher Galaxy Buds fixes"
+        source = "https://github.com/MrCool-888/mrcool-patches"
+        author = "MrCool-888"
         contact = "na"
         website = "na"
         license = "GPLv3"
@@ -37,3 +36,10 @@ tasks {
         dependsOn("generatePatchesList")
     }
 }
+
+val verifyOpenBubblesExtension by tasks.registering(Exec::class) {
+    workingDir(rootProject.projectDir)
+    commandLine("python", "integrations/openbubbles/verify-extension.py")
+}
+tasks.processResources { dependsOn(verifyOpenBubblesExtension) }
+dependencies { testImplementation(kotlin("test-junit")) }

@@ -1,0 +1,401 @@
+package com.openbubbles.wear.bridge
+
+import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import com.openbubbles.wear.protocol.*
+import org.json.JSONObject
+
+/** Backend-authoritative bridge; every action runs inside patched OpenBubbles. */
+object BridgeCoordinator {
+    private const val MAX_SEND_LENGTH = 800
+    private var initialized = false
+    private lateinit var appContext: Context
+    private lateinit var prefs: BridgePreferences
+    private lateinit var store: BridgeStore
+    private lateinit var mediaCache: MediaCache
+    private val handler = Handler(Looper.getMainLooper())
+    private val syncRunnable = Runnable { publishSync() }
+    private var discoveryRunning = false
+
+    data class SendResult(val threadId: String?, val error: String?, val message: WireMessage? = null,
+        val retryable: Boolean = false)
+
+    @Synchronized fun init(context: Context) {
+        if (initialized) return
+        appContext = context.applicationContext
+        prefs = BridgePreferences(appContext)
+        store = BridgeStore(appContext)
+        mediaCache = MediaCache(appContext)
+        initialized = true
+        PatchBridgeClient.onAvailabilityChanged = { scheduleSync() }
+    }
+
+    fun refreshBackend() {
+        if (!initialized) return
+        PatchBridgeClient.probe(appContext, force = true) { ready ->
+            publishSync()
+            if (!ready) return@probe
+            maybeAutoDiscoverChats(appContext)
+            store.snapshot().filter { it.directHistory }.forEach { previous ->
+                threadPayload(previous.id) { payload ->
+                    val current = payload.thread
+                    if (payload.error == null && current != null && current != previous)
+                        publishThreadUpdate(current)
+                }
+            }
+        }
+    }
+
+    fun onAlert(rawGuid: String, postedAt: Long, hidePreview: Boolean) {
+        if (!initialized || !prefs.relayEnabled || !Protocol.isChatGuid(rawGuid)) return
+        val id = BridgeJson.canonicalId(rawGuid) ?: return
+        threadPayload(id) { payload ->
+            if (payload.error != null) return@threadPayload
+            val thread = payload.thread ?: return@threadPayload
+            // The native notification's timestamp identifies its incoming backend message.
+            val incoming = thread.messages.lastOrNull { !it.fromMe && it.timestamp == postedAt }
+                ?: return@threadPayload
+            publishThreadUpdate(thread, incoming.id, hidePreview)
+            scheduleSync()
+        }
+    }
+
+    fun threadFor(threadId: String): WireThread? =
+        if (!initialized) null else store.get(threadId)?.let(::decorate)
+
+    fun threadPayload(threadId: String, callback: (ThreadPayload) -> Unit) {
+        if (!initialized) {
+            callback(ThreadPayload(error = "The bridge is still starting."))
+            return
+        }
+        val cached = threadFor(threadId)
+        if (!prefs.relayEnabled) {
+            callback(ThreadPayload(thread = cached, error = "Relay is paused on the phone."))
+            return
+        }
+        if (threadId.startsWith("new:")) {
+            callback(ThreadPayload(thread = cached))
+            return
+        }
+        val fields = JSONObject().put("threadId", threadId).put("limit", 80)
+        cached?.address?.let { address -> if (address.isNotBlank()) fields.put("address", address) }
+        PatchBridgeClient.request(appContext, "thread", fields, 24_000) { reply ->
+            if (!prefs.relayEnabled) {
+                callback(ThreadPayload(error = "Relay is paused on the phone."))
+                return@request
+            }
+            val history = reply.json?.optJSONObject("thread")
+            val bridged = if (reply.ok && history?.optJSONArray("messages") != null)
+                BridgeJson.thread(history) else null
+            if (bridged == null) {
+                callback(ThreadPayload(thread = cached?.let(::decorate), error = reply.error
+                    ?: "OpenBubbles returned no message history. Cached messages may be incomplete."))
+                return@request
+            }
+            val stored = storeBridgeThread(bridged)
+            callback(ThreadPayload(thread = decorate(stored)))
+        }
+    }
+
+    fun markReadDirect(threadId: String, callback: (String?) -> Unit) {
+        if (!initialized) {
+            callback("The bridge is still starting.")
+            return
+        }
+        if (!prefs.relayEnabled) {
+            callback("Relay is paused on the phone.")
+            return
+        }
+        val fields = JSONObject().put("threadId", threadId)
+        store.get(threadId)?.address?.let { address -> if (address.isNotBlank()) fields.put("address", address) }
+        PatchBridgeClient.request(appContext, "markRead", fields, 8_000) { reply ->
+            val error = if (reply.ok) null else reply.error ?: "OpenBubbles could not mark the chat read."
+            if (error == null) {
+                prefs.markReadAt(threadId)
+                store.markRead(threadId)
+                publishAfterAction(threadId)
+            }
+            callback(error)
+        }
+    }
+
+    private fun sendDirect(
+        requestId: String,
+        threadId: String,
+        address: String?,
+        text: String,
+        callback: (SendResult) -> Unit
+    ) {
+        val fields = JSONObject().put("requestId", requestId).put("threadId", threadId).put("text", text)
+        val recipient = address ?: store.get(threadId)?.address
+        if (!recipient.isNullOrBlank()) fields.put("address", recipient)
+        PatchBridgeClient.request(appContext, "send", fields, 24_000) { reply ->
+            val body = reply.json
+            if (!reply.ok || body == null) {
+                callback(
+                    SendResult(
+                        threadId,
+                        reply.error ?: "OpenBubbles could not send the message."
+                    )
+                )
+                return@request
+            }
+            val bridged = BridgeJson.thread(body.optJSONObject("thread"))
+            val stored = bridged?.let(::storeBridgeThread)
+            val canonical = stored?.id
+                ?: BridgeJson.canonicalId(body.optString("threadId"))
+                ?: threadId
+            val message = BridgeJson.message(body.optJSONObject("message"), canonical)
+            if (stored == null) {
+                val previous = store.get(threadId)
+                val fallback = previous?.copy(id = canonical, messages = emptyList()) ?: WireThread(
+                    id = canonical, title = recipient ?: "Conversation", address = recipient,
+                    isGroup = Protocol.isGroupGuid(canonical.removePrefix("chat_"))
+                )
+                val sent = message ?: recordSent(canonical, requestId, text)
+                storeBridgeThread(fallback.copy(messages = listOf(sent)))
+            }
+            prefs.markReadAt(canonical)
+            store.markRead(canonical)
+            publishAfterAction(canonical)
+            callback(
+                SendResult(
+                    threadId = canonical,
+                    error = null,
+                    message = message
+                )
+            )
+        }
+    }
+
+    fun discoverChatsDirect(
+        requestId: String,
+        offset: Int = 0,
+        callback: (com.openbubbles.wear.protocol.GroupsResult) -> Unit
+    ) {
+        if (!initialized) {
+            callback(com.openbubbles.wear.protocol.GroupsResult(requestId = requestId, offset = offset, error = "The bridge is still starting."))
+            return
+        }
+        if (!prefs.relayEnabled) {
+            callback(com.openbubbles.wear.protocol.GroupsResult(requestId = requestId, offset = offset, error = "Relay is paused on the phone."))
+            return
+        }
+        PatchBridgeClient.request(appContext, "chats", JSONObject().put("limit", 40).put("offset", offset), 12_000) { reply ->
+            if (!prefs.relayEnabled) {
+                callback(com.openbubbles.wear.protocol.GroupsResult(requestId = requestId, offset = offset, error = "Relay is paused on the phone."))
+                return@request
+            }
+            val array = if (reply.ok) reply.json?.optJSONArray("chats") else null
+            if (array == null) {
+                callback(
+                    com.openbubbles.wear.protocol.GroupsResult(
+                        requestId = requestId,
+                        offset = offset,
+                        error = reply.error ?: "OpenBubbles did not return its chat list."
+                    )
+                )
+                return@request
+            }
+            val jsonChats = (0 until array.length()).mapNotNull { array.optJSONObject(it) }
+            // Import oldest first so the bounded directory keeps the newest chats.
+            val imported = jsonChats.mapNotNull(BridgeJson::thread).asReversed().map(::storeBridgeThread)
+            val visible = imported.map(::decorate).map { it.toSummary() }
+                .distinctBy { it.id }
+                .sortedByDescending { it.lastTimestamp }
+            prefs.lastChatDiscoveryAt = System.currentTimeMillis()
+            scheduleSync()
+            callback(
+                com.openbubbles.wear.protocol.GroupsResult(
+                    requestId = requestId,
+                    offset = reply.json?.optInt("offset", offset) ?: offset,
+                    nextOffset = reply.json?.takeIf { it.has("nextOffset") }?.optInt("nextOffset"),
+                    groups = visible.filter { it.isGroup },
+                    chats = visible.filterNot { it.isGroup },
+                    note = "Read directly from OpenBubbles with the Wear patch. Open a chat to load its history."
+                )
+            )
+        }
+    }
+
+    fun media(mediaId: String, callback: (MediaInfo?, String?) -> Unit) {
+        if (!initialized) {
+            callback(null, "The bridge is still starting.")
+            return
+        }
+        if (!prefs.relayEnabled) {
+            callback(null, "Relay is paused on the phone.")
+            return
+        }
+        val cached = store.snapshot().firstOrNull { thread -> thread.messages.any { it.mediaId == mediaId } }
+        val message = cached?.messages?.firstOrNull { it.mediaId == mediaId }
+        val source = BridgeJson.mediaUri(message?.sourceUri)
+        if (mediaCache.info(mediaId) == null && cached != null && message != null && source != null) {
+            val enriched = mediaCache.ingest(cached, mapOf(message.id to MediaSource(source, message.mediaMime)), cached)
+            store.update(enriched)
+            publishThreadUpdate(decorate(enriched))
+        }
+        val info = AvatarCache.info(appContext, mediaId) ?: mediaCache.info(mediaId)
+        if (info == null) {
+            callback(null, "This photo is no longer cached on the phone.")
+            return
+        }
+        WatchLink.publishMedia(appContext, info) { error ->
+            if (error == null) {
+                callback(info, null)
+            } else {
+                callback(null, error)
+            }
+        }
+    }
+
+
+    private fun storeBridgeThread(thread: WireThread): WireThread {
+        val address = Protocol.normalizeAddress(thread.address)
+        val alias = if (thread.isGroup || address == null) null else store.snapshot().firstOrNull {
+            it.id.startsWith("new:") && !it.isGroup && Protocol.normalizeAddress(it.address) == address
+        }
+        return store.upsertIncoming(thread, mergeFromId = alias?.id)
+    }
+
+    fun send(requestId: String, threadId: String?, rawText: String, address: String? = null,
+        callback: (SendResult) -> Unit) {
+        if (!initialized) { callback(SendResult(threadId, "The bridge is still starting.")); return }
+        if (!prefs.relayEnabled) { callback(SendResult(threadId, "Wear bridge is disabled in OpenBubbles settings.")); return }
+        if (requestId.isBlank() || requestId.length > 200) {
+            callback(SendResult(threadId, "Invalid send request ID.")); return
+        }
+        val text = rawText.trim()
+        if (text.isBlank() || text.length > MAX_SEND_LENGTH) {
+            callback(SendResult(threadId, "Enter a message of 1–800 characters.")); return
+        }
+        if (threadId.isNullOrBlank()) {
+            callback(SendResult(null, "Open this chat in OpenBubbles on the phone first.")); return
+        }
+        sendDirect(requestId, threadId, address, text, callback)
+    }
+
+    private fun recordSent(threadId: String, requestId: String, text: String): WireMessage {
+        val message = WireMessage(id = BridgeStore.OPTIMISTIC_MESSAGE_PREFIX + requestId,
+            threadId = threadId, text = text, timestamp = System.currentTimeMillis(),
+            fromMe = true, status = "unconfirmed")
+        store.mergeHistory(threadId, listOf(message))
+        return message
+    }
+
+    fun openPhone(threadId: String?): String? {
+        if (!initialized || !prefs.relayEnabled) return "Enable the Wear bridge in OpenBubbles first."
+        val launcher = appContext.packageManager.getLaunchIntentForPackage(appContext.packageName)
+            ?: return "OpenBubbles cannot be opened."
+        val intent = if (threadId == null) launcher.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            else {
+                if (!Protocol.isChatGuid(threadId.removePrefix("chat_"))) return "Invalid conversation ID."
+                ConversationLaunch.existingGuid(launcher, threadId)
+            }
+        return runCatching { appContext.startActivity(intent); null }
+            .getOrElse { "Android did not allow opening this OpenBubbles conversation." }
+    }
+
+    fun relayEnabled(context: Context): Boolean { init(context); return prefs.relayEnabled }
+
+    fun clearCache(context: Context) {
+        init(context)
+        store.clear()
+        mediaCache.clear()
+        AvatarCache.clear(appContext)
+        WatchLink.clearMedia(appContext)
+        prefs.clearCachedMessages()
+        scheduleSync()
+    }
+
+    fun diagnostics(context: Context): String {
+        init(context)
+        return "Wear bridge " + BridgeInfo.BRIDGE_VERSION + "\n" +
+            (if (prefs.relayEnabled) PatchBridgeClient.backendState else "Disabled") +
+            "\nCached chats: " + store.snapshot().size + "\nCached images: " + mediaCache.count() +
+            "\nContacts: " + (if (ContactDirectory.hasAccess(context)) "Allowed" else "Not allowed") +
+            "\nLast watch: " + prefs.lastSeenWatchName.ifBlank { "Not connected yet" }
+    }
+
+    fun pong(): PongPayload = PongPayload(
+        phoneName = BridgeInfo.phoneName(), bridgeVersion = BridgeInfo.BRIDGE_VERSION,
+        relayEnabled = initialized && prefs.relayEnabled,
+        phoneLocked = initialized && BridgeInfo.isPhoneLocked(appContext),
+        phoneAwake = initialized && BridgeInfo.isPhoneAwake(appContext),
+        trackedConversations = if (initialized) store.snapshot().size else 0,
+        contactsAccess = initialized && ContactDirectory.hasAccess(appContext),
+        directBridge = initialized && PatchBridgeClient.isAvailable(appContext),
+        backendState = PatchBridgeClient.backendState
+    )
+
+    fun maybeAutoDiscoverChats(context: Context) {
+        init(context)
+        if (!prefs.relayEnabled || discoveryRunning) return
+        discoveryRunning = true
+        fun page(offset: Int) {
+            discoverChatsDirect("auto-directory", offset) { result ->
+                val next = result.nextOffset
+                if (result.error == null && next != null && next > offset && next <= 5000) page(next)
+                else { discoveryRunning = false; scheduleSync() }
+            }
+        }
+        page(0)
+    }
+
+    fun sendSyncTo(nodeId: String) {
+        if (!initialized) return
+        PatchBridgeClient.probe(appContext, force = true) { ready ->
+            if (ready) maybeAutoDiscoverChats(appContext)
+            WatchLink.sendToNode(appContext, nodeId, Protocol.PATH_SYNC,
+                Wire.encodeBytes(buildSync(store.snapshot().map(::decorate))))
+        }
+    }
+
+    private fun buildSync(threads: List<WireThread>): SyncPayload = Wire.syncForTransport(SyncPayload(
+        generatedAt = System.currentTimeMillis(), phoneName = BridgeInfo.phoneName(),
+        bridgeVersion = BridgeInfo.BRIDGE_VERSION, relayEnabled = prefs.relayEnabled,
+        phoneLocked = BridgeInfo.isPhoneLocked(appContext), phoneAwake = BridgeInfo.isPhoneAwake(appContext),
+        conversations = threads.map { it.toSummary() }, contactsAccess = ContactDirectory.hasAccess(appContext),
+        directBridge = PatchBridgeClient.isAvailable(appContext), backendState = PatchBridgeClient.backendState
+    ))
+
+    private fun decorate(thread: WireThread): WireThread {
+        val ready = prefs.relayEnabled && PatchBridgeClient.isAvailable(appContext)
+        return thread.copy(canReply = ready, canMarkRead = ready, canSend = ready)
+    }
+
+    private fun publishAfterAction(threadId: String) {
+        store.get(threadId)?.let { publishThreadUpdate(decorate(it)) }
+        scheduleSync()
+    }
+
+    private fun publishThreadUpdate(thread: WireThread, alertMessageId: String? = null, hidePreview: Boolean = false) {
+        if (!initialized || !prefs.relayEnabled) return
+        val transport = Wire.threadForTransport(thread)
+        WatchLink.putThread(appContext, transport)
+        WatchLink.broadcast(appContext, Protocol.PATH_UPDATE, Wire.encodeBytes(UpdatePayload(
+            thread = transport, alertMessageId = alertMessageId, hideAlertPreview = hidePreview)))
+    }
+
+    private fun scheduleSync() {
+        handler.removeCallbacks(syncRunnable)
+        handler.postDelayed(syncRunnable, 400L)
+    }
+
+    private fun publishSync() {
+        if (!initialized) return
+        val threads = store.snapshot().map(::decorate)
+        val payload = buildSync(threads)
+        WatchLink.putSync(appContext, payload)
+        WatchLink.broadcast(appContext, Protocol.PATH_SYNC, Wire.encodeBytes(payload))
+        if (!prefs.relayEnabled) return
+        threads.forEach { WatchLink.putThread(appContext, it) }
+        WatchLink.pruneThreads(appContext, threads.map { it.id }.toSet())
+        val mediaIds = threads.flatMap { it.messages.mapNotNull { message -> message.mediaId } }.toSet()
+        mediaCache.prune(mediaIds)
+        WatchLink.pruneMedia(appContext, mediaIds + AvatarCache.ids(appContext))
+        prefs.lastPublishAt = System.currentTimeMillis()
+    }
+}

@@ -1,4 +1,4 @@
-rootProject.name = "morphe-patches-template"
+rootProject.name = "mrcool-patches"
 
 pluginManagement {
     repositories {
