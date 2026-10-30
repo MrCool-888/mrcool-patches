@@ -132,3 +132,27 @@ node_modules/
 # Ignore IDEA files
 .idea/
 local.properties
+
+# Host inputs, SDK configuration and private signing material remain local.
+work/
+inputs/
+local.properties
+keystore.properties
+*.keystore
+*.jks
+*.apk
+*.xapk
+*.log
+__pycache__/
+
+# Host inputs, SDK configuration and private signing material remain local.
+work/
+inputs/
+local.properties
+keystore.properties
+*.keystore
+*.jks
+*.apk
+*.xapk
+*.log
+__pycache__/
