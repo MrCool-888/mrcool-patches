@@ -31,9 +31,6 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Prepare pinned Android SDK
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-
       - name: Verify bridge sources and cached extension
         run: |
           python integrations/openbubbles/verify-extension.py
@@ -83,4 +80,3 @@ jobs:
           name: mrcool-patches
           path: patches/build/libs/patches-*.mpp
           if-no-files-found: error
-
