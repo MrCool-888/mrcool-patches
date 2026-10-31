@@ -1,6 +1,6 @@
 # MrCool Patches
 
-Private Morphe patches based on [Morphe's patches template](https://github.com/MorpheApp/morphe-patches-template).
+Morphe patches based on [Morphe's patches template](https://github.com/MorpheApp/morphe-patches-template).
 
 <!-- PATCHES_START -->
 > **[v1.0.0](https://github.com/MrCool-888/mrcool-patches/releases/tag/v1.0.0)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;3 patches total
@@ -56,8 +56,7 @@ GitHub Actions uses the template's repository-scoped token. Keep personal creden
 ```
 
 The bundle is `patches/build/libs/patches-<version>.mpp`. Apply it with Morphe Desktop/Manager.
-Because this repository is private, use an authenticated download and import the bundle locally;
-an anonymous Manager source URL cannot read this repository.
+Add this repository as a patch source in Morphe Manager to receive updates.
 The release includes the combined `.mpp`, a patched Smart Launcher 6.6 build 024 ARM64 APK,
 the existing tested OpenBubbles phone/watch APKs, validation notes, and SHA-256 checksums.
 Smart Launcher release APKs keep the signing key used by the supplied build 024 APK.
