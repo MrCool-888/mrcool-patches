@@ -27,6 +27,10 @@ GitHub Actions uses the template's repository-scoped token. Keep personal creden
 The bundle is `patches/build/libs/patches-<version>.mpp`. Apply it with Morphe Desktop/Manager.
 Because this repository is private, use an authenticated download and import the bundle locally;
 an anonymous Manager source URL cannot read this repository.
+The release includes the combined `.mpp`, a patched Smart Launcher 6.6 build 024 ARM64 APK,
+the existing tested OpenBubbles phone/watch APKs, validation notes, and SHA-256 checksums.
+Use the `.mpp` with your existing Manager signing key when updating a Manager-signed launcher;
+the downloadable launcher APK has a separate release signing certificate and stock version code.
 OpenBubbles and the watch must use the same application ID and signing certificate for Wear Data Layer.
 Preserve the existing phone installation's signing key and APK format; do not uninstall or clear data.
 
