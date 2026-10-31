@@ -49,6 +49,10 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Remove bundles built during tests
+        if: github.event_name != 'pull_request'
+        run: rm -f patches/build/libs/*.mpp patches/build/libs/*.mpp.asc
+
       # Semantic release runs its own Gradle build command.
       # Only dev and main branch will generate a release as specified by .releaserc
       - name: Release
