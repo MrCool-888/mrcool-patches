@@ -2,8 +2,8 @@
 
 ### ✨ New Features
 
-* **SmartLauncher:** add Pro and support build 024 with Buds3 fix ([3871e55](https://github.com/MrCool-888/mrcool-patches/commit/3871e55a1246562034ace64f269deac73763830a))
+* **SmartLauncher:** add Pro and support build 024 with Buds3 fix ([7429531](https://github.com/MrCool-888/mrcool-patches/commit/7429531de9da8a01308ddc8e97fcffb1ca673f2f))
 
 ### 🐛 Bug Fixes
 
-* **SmartLauncher:** use the standard field reference API ([8c591d1](https://github.com/MrCool-888/mrcool-patches/commit/8c591d10dc358cadc08b1242b06a0a98283f48e6))
+* **SmartLauncher:** use the standard field reference API ([6f7ffb7](https://github.com/MrCool-888/mrcool-patches/commit/6f7ffb7bc5c67653fb36d83697d35818f9d22b83))
