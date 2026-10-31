@@ -10,6 +10,25 @@ internal const val MEDIA_PROVIDER_NAME = "com.openbubbles.wear.patch.CompanionMe
 internal const val MEDIA_AUTHORITY = "com.openbubbles.messaging.wear.media"
 internal const val SETTINGS_ACTIVITY = "com.openbubbles.wear.patch.PatchSettingsActivity"
 
+internal fun addSettingsToManifest(document: Document) {
+    val manifest = document.documentElement
+    requireSupportedVersion(manifest.getAttribute("package"), manifest.getAttributeNS(ANDROID_NS, "versionName"),
+        manifest.getAttributeNS(ANDROID_NS, "versionCode"))
+    val applications = manifest.getElementsByTagName("application")
+    if (applications.length != 1) throw PatchException("Expected one application in the manifest")
+    val application = applications.item(0) as Element
+    val activities = application.getElementsByTagName("activity")
+    for (index in 0 until activities.length) {
+        if ((activities.item(index) as Element).getAttributeNS(ANDROID_NS, "name") == SETTINGS_ACTIVITY)
+            throw PatchException("The patch settings activity is already declared")
+    }
+    application.appendChild(document.createElement("activity").apply {
+        setAttributeNS(ANDROID_NS, "android:name", SETTINGS_ACTIVITY)
+        setAttributeNS(ANDROID_NS, "android:exported", "false")
+        setAttributeNS(ANDROID_NS, "android:label", "Morphe patches")
+    })
+}
+
 internal fun addBridgeToManifest(document: Document) {
     val manifest = document.documentElement
     requireSupportedVersion(manifest.getAttribute("package"), manifest.getAttributeNS(ANDROID_NS, "versionName"),
@@ -22,7 +41,7 @@ internal fun addBridgeToManifest(document: Document) {
     val components = application.childNodes
     for (index in 0 until components.length) {
         val element = components.item(index) as? Element ?: continue
-        if (element.getAttributeNS(ANDROID_NS, "name") in setOf(SERVICE_NAME, MEDIA_PROVIDER_NAME, SETTINGS_ACTIVITY,
+        if (element.getAttributeNS(ANDROID_NS, "name") in setOf(SERVICE_NAME, MEDIA_PROVIDER_NAME,
                 "com.openbubbles.wear.patch.CompanionService") ||
             MEDIA_AUTHORITY in element.getAttributeNS(ANDROID_NS, "authorities").split(';'))
             throw PatchException("The Wear bridge component or media authority is already declared")
@@ -47,9 +66,6 @@ internal fun addBridgeToManifest(document: Document) {
     filter("com.google.android.gms.wearable.MESSAGE_RECEIVED", true)
     filter("com.google.android.gms.wearable.CAPABILITY_CHANGED", false)
     application.appendChild(service)
-    application.appendChild(component("activity", SETTINGS_ACTIVITY, false).apply {
-        setAttributeNS(ANDROID_NS, "android:label", "Morphe patches")
-    })
     application.appendChild(component("provider", MEDIA_PROVIDER_NAME, false).apply {
         setAttributeNS(ANDROID_NS, "android:authorities", MEDIA_AUTHORITY)
         setAttributeNS(ANDROID_NS, "android:grantUriPermissions", "false")

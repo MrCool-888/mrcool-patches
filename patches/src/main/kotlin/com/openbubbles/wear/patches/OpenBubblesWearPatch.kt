@@ -28,8 +28,21 @@ private val verifyBackendPatch = bytecodePatch {
     }
 }
 
-private val bridgeManifestPatch = resourcePatch {
+private val settingsManifestPatch = resourcePatch {
     dependsOn(verifyBackendPatch)
+    execute {
+        document("AndroidManifest.xml").use(::addSettingsToManifest)
+    }
+}
+
+private val sharedSettingsPatch = bytecodePatch {
+    dependsOn(settingsManifestPatch)
+    extendWith("openbubbles-wear.mpe")
+    execute { addSettingsMenu() }
+}
+
+private val bridgeManifestPatch = resourcePatch {
+    dependsOn(sharedSettingsPatch)
     execute {
         document("AndroidManifest.xml").use(::addBridgeToManifest)
     }
@@ -38,7 +51,7 @@ private val bridgeManifestPatch = resourcePatch {
 @Suppress("unused")
 val openBubblesWearBridgePatch = bytecodePatch(
     name = "Wear companion bridge",
-    description = "Embeds the Wear companion directly in OpenBubbles; no separate phone app or notification access.",
+    description = "Embeds the Wear companion in OpenBubbles and includes a background notification control; no separate phone app is needed.",
 ) {
     compatibleWith(
         Compatibility(
@@ -49,9 +62,7 @@ val openBubblesWearBridgePatch = bytecodePatch(
     )
     // Check the original backend before extension merging can mask missing classes.
     dependsOn(bridgeManifestPatch)
-    extendWith("openbubbles-wear.mpe")
     execute {
-        addSettingsMenu()
         addEmbeddedHooks()
         val service = classDefByOrNull(SERVICE_CLASS)
             ?: throw PatchException("Embedded WearBridgeService is missing")
@@ -74,6 +85,21 @@ val openBubblesWearBridgePatch = bytecodePatch(
             "delete(Landroid/net/Uri;Ljava/lang/String;[Ljava/lang/String;)I",
         ), provider.methods.map { "${it.name}(${it.parameterTypes.joinToString("")})${it.returnType}" }.toSet())
     }
+}
+
+@Suppress("unused")
+val readyNotificationSettingsPatch = bytecodePatch(
+    name = "Ready for messages notification control",
+    description = "Adds a setting to hide or show the background connection notification independently of the Wear bridge.",
+) {
+    compatibleWith(
+        Compatibility(
+            packageName = "com.openbubbles.messaging",
+            name = "OpenBubbles",
+            targets = listOf(AppTarget(version = "2.0.0", versionCodes = mapOf(SupportedAbi.ARM64_V8A to 20002289))),
+        ),
+    )
+    dependsOn(sharedSettingsPatch)
 }
 
 private fun app.morphe.patcher.patch.BytecodePatchContext.requireSupportedVersion() {
