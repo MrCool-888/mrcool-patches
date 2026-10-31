@@ -9,7 +9,6 @@ import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLa
 import app.morphe.patcher.extensions.InstructionExtensions.instructions
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.util.smali.ExternalLabel
-import app.morphe.util.getReference
 import com.android.tools.smali.dexlib2.iface.instruction.formats.Instruction21c
 import com.android.tools.smali.dexlib2.iface.reference.FieldReference
 import app.mrcool.patches.smartlauncher.smartLauncher
@@ -27,7 +26,7 @@ val enableProPatch = bytecodePatch(
     execute {
         PurchaseItemsCtor.apply {
             val sputInstr =  this.instructionMatches[2].getInstruction<Instruction21c>()
-            val lifetimeField = sputInstr.getReference<FieldReference>()!!
+            val lifetimeField = sputInstr.reference as FieldReference
             val purchasableItemType = classDefBy(lifetimeField.type)
 
             val singletonField = this.classDef.staticFields.first { f -> f.type == this.classDef.type }
