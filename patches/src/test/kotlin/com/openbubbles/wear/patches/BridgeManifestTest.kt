@@ -26,6 +26,7 @@ class BridgeManifestTest {
 
     @Test fun `adds embedded Wear service and private settings and media without changing native components`() {
         val document = manifest("""<queries><package android:name="another.app"/></queries>""")
+        addSettingsToManifest(document)
         addBridgeToManifest(document)
         val xpath = javax.xml.xpath.XPathFactory.newInstance().newXPath()
         fun evaluate(expression: String) = xpath.evaluate(expression, document)
@@ -51,6 +52,19 @@ class BridgeManifestTest {
         assertEquals("1", evaluate("count(/manifest/queries/package)"))
         assertEquals("com.openbubbles.messaging", document.documentElement.getAttribute("package"))
         assertFailsWith<PatchException> { addBridgeToManifest(document) }
+    }
+
+    @Test fun `notification settings add no bridge components and coexist with bridge`() {
+        val document = manifest()
+        addSettingsToManifest(document)
+        assertEquals(1, document.getElementsByTagName("activity").length)
+        assertEquals(1, document.getElementsByTagName("service").length)
+        assertEquals(0, document.getElementsByTagName("provider").length)
+        addBridgeToManifest(document)
+        assertEquals(1, document.getElementsByTagName("activity").length)
+        assertEquals(2, document.getElementsByTagName("service").length)
+        assertEquals(1, document.getElementsByTagName("provider").length)
+        assertFailsWith<PatchException> { addSettingsToManifest(document) }
     }
 
     @Test fun `rejects provider class or authority conflicts before altering the manifest`() {

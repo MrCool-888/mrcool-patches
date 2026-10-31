@@ -4,6 +4,7 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.ComponentName
 import android.provider.Settings
 import android.widget.Switch
 import android.widget.TextView
@@ -23,7 +24,24 @@ import org.robolectric.annotation.Config
 class PatchSettingsTest {
     private val context get() = RuntimeEnvironment.getApplication()
 
-    @Before fun reset() { context.getSharedPreferences(PatchSettings.PREFS, Context.MODE_PRIVATE).edit().clear().commit() }
+    private val bridgeService get() = ComponentName(context, "com.openbubbles.wear.bridge.WearBridgeService")
+    @Before fun reset() {
+        context.getSharedPreferences(PatchSettings.PREFS, Context.MODE_PRIVATE).edit().clear().commit()
+        shadowOf(context.packageManager).addServiceIfNotPresent(bridgeService)
+    }
+
+    @Test fun notificationSettingsWorkWithoutWearService() {
+        shadowOf(context.packageManager).removeService(bridgeService)
+        val controller = Robolectric.buildActivity(PatchSettingsActivity::class.java).setup()
+        val controls = switches(controller.get().findViewById(android.R.id.content))
+        assertEquals(1, controls.size)
+        assertEquals("Hide ready-to-receive notification", controls.single().text)
+        controls.single().performClick()
+        val intent = shadowOf(controller.get()).nextStartedActivity
+        assertEquals(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS, intent.action)
+        assertEquals(PatchSettings.READY_NOTIFICATION_CHANNEL, intent.getStringExtra(Settings.EXTRA_CHANNEL_ID))
+        controller.pause().stop().destroy()
+    }
 
     @Test fun defaultsEnabledAndPersistsWithoutRepatching() {
         assertTrue(PatchSettings.isEnabled(context))

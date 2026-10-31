@@ -43,6 +43,10 @@ Morphe patches based on [Morphe's patches template](https://github.com/MorpheApp
 
 The watch app is developed separately in [OB-wearos](https://github.com/MrCool-888/OB-wearos).
 The OpenBubbles bridge is embedded in the patched phone app; no standalone phone companion is built.
+The Ready for messages notification control can be selected without the Wear bridge. Open OpenBubbles
+Settings → Morphe patches → Hide ready-to-receive notification to open Android's Background connection
+channel settings, then turn that channel off or on. This does not turn off incoming message notifications.
+The Wear bridge patch also includes this control for compatibility with existing patched installations.
 Only Buds3 Pro has device confirmation. The launcher signature compatibility dependency is included.
 
 ## Build

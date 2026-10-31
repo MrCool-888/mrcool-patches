@@ -39,6 +39,15 @@ public final class PatchSettingsActivity extends Activity {
         title.setTextSize(26);
         title.setPadding(0, padding, 0, padding);
         content.addView(title);
+        boolean hasBridge;
+        try {
+            getPackageManager().getServiceInfo(new android.content.ComponentName(this,
+                    "com.openbubbles.wear.bridge.WearBridgeService"), 0);
+            hasBridge = true;
+        } catch (android.content.pm.PackageManager.NameNotFoundException e) {
+            hasBridge = false;
+        }
+        if (hasBridge) {
         Switch toggle = new Switch(this);
         toggle.setText("Wear companion bridge");
         toggle.setTextSize(18);
@@ -51,6 +60,7 @@ public final class PatchSettingsActivity extends Activity {
         detail.setTextSize(16);
         detail.setPadding(0, padding, 0, 0);
         content.addView(detail);
+        }
         readyNotificationToggle = new Switch(this);
         readyNotificationToggle.setText("Hide ready-to-receive notification");
         readyNotificationToggle.setTextSize(18);
@@ -71,6 +81,7 @@ public final class PatchSettingsActivity extends Activity {
         notificationDetail.setTextSize(16);
         notificationDetail.setPadding(0, padding, 0, padding);
         content.addView(notificationDetail);
+        if (hasBridge) {
         Button contacts = new Button(this);
         contacts.setText("Allow contacts access");
         contacts.setOnClickListener(view -> requestPermissions(new String[]{android.Manifest.permission.READ_CONTACTS}, 42));
@@ -91,6 +102,7 @@ public final class PatchSettingsActivity extends Activity {
         diagnostics.setTextSize(14);
         diagnostics.setPadding(0, padding, 0, 0);
         content.addView(diagnostics);
+        }
         ScrollView scroll = new ScrollView(this);
         scroll.addView(content);
         setContentView(scroll);
