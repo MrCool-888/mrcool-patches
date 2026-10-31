@@ -2,17 +2,10 @@ package app.mrcool.patches.smartlauncher.widgets
 
 import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
 import app.morphe.patcher.patch.PatchException
-import app.morphe.patcher.patch.AppTarget
-import app.morphe.patcher.patch.Compatibility
 import app.morphe.patcher.patch.bytecodePatch
 import com.android.tools.smali.dexlib2.iface.instruction.formats.Instruction3rc
 import app.mrcool.patches.smartlauncher.shared.signature.disableSignatureCheckPatch
-
-private val smartLauncher = Compatibility(
-    name = "Smart Launcher",
-    packageName = "ginlemon.flowerfree",
-    targets = listOf(AppTarget("6.6 build 020"))
-)
+import app.mrcool.patches.smartlauncher.smartLauncher
 
 private val widgetExtensionPatch = bytecodePatch {
     extendWith("extensions/smartlauncher.mpe")

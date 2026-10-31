@@ -3,7 +3,7 @@ group = "app.mrcool"
 patches {
     about {
         name = "MrCool Patches"
-        description = "OpenBubbles Wear integration and Smart Launcher Galaxy Buds fixes"
+        description = "OpenBubbles Wear integration and Smart Launcher patches"
         source = "https://github.com/MrCool-888/mrcool-patches"
         author = "MrCool-888"
         contact = "na"

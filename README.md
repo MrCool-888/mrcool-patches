@@ -6,7 +6,8 @@ Private Morphe patches based on [Morphe's patches template](https://github.com/M
 | Patch | Target | Purpose |
 | --- | --- | --- |
 | Wear companion bridge | OpenBubbles 2.0.0 (20002289) | Embeds the phone bridge and patch settings for the Wear OS companion. |
-| Fix Galaxy Buds3 Pro widget | Smart Launcher 6.6 build 020 | Fixes Samsung One UI 8.5 widget setup and reconfiguration. |
+| Fix Galaxy Buds3 Pro widget | Smart Launcher 6.6 build 020 / 024 | Fixes Samsung One UI 8.5 widget setup and reconfiguration. |
+| Enable Pro | Smart Launcher 6.6 build 020 / 024 | Enables Pro features; adapted from hoo-dles/morphe-patches. |
 <!-- PATCHES_END -->
 
 The watch app is developed separately in [OB-wearos](https://github.com/MrCool-888/OB-wearos).
@@ -61,6 +62,7 @@ Its `protocol` source is the same v4 wire contract as OB-wearos; synchronize bot
 ## Attribution and license
 
 GPL-3.0; see LICENSE and NOTICE. Template: MorpheApp/morphe-patches-template.
-The minimal Smart Launcher signature compatibility patch is from hoo-dles/morphe-patches
-(copyright 2026 Hoo-dles); the Buds3 widget fix was developed for this project.
+The Smart Launcher Pro and signature compatibility patches are adapted from hoo-dles/morphe-patches
+(copyright 2026 Hoo-dles), revision `1f9d0da03804edd5a2e8642de6fc964814de9dd4`.
+The Buds3 widget fix was developed for this project. The two launcher features can be selected independently.
 The watch application source belongs in OB-wearos, not this patch bundle.
