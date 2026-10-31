@@ -60,8 +60,12 @@ Because this repository is private, use an authenticated download and import the
 an anonymous Manager source URL cannot read this repository.
 The release includes the combined `.mpp`, a patched Smart Launcher 6.6 build 024 ARM64 APK,
 the existing tested OpenBubbles phone/watch APKs, validation notes, and SHA-256 checksums.
-Use the `.mpp` with your existing Manager signing key when updating a Manager-signed launcher;
-the downloadable launcher APK has a separate release signing certificate and stock version code.
+Smart Launcher release APKs keep the signing key used by the supplied build 024 APK.
+OpenBubbles phone/watch APKs keep their separate, existing shared key.
+The public certificate pins are in `apk-signing-certificates.json`; private keys stay local.
+The `.mpp` contains patch code, not an APK signing key. When patching manually, select the
+key matching that app's installed APK. Using the supplied APKs preserves our per-app signing policy.
+The older Manager-signed/MAX-version-code launcher requires its original key/version-code policy.
 OpenBubbles and the watch must use the same application ID and signing certificate for Wear Data Layer.
 Preserve the existing phone installation's signing key and APK format; do not uninstall or clear data.
 
@@ -90,6 +94,14 @@ Commit the regenerated MPE and `extension-lock.json` together with the source ch
 
 Work on `dev`; `feat:` and `fix:` commits use the template's semantic release workflow.
 Merge `dev` into `main` without squashing for stable releases. Release metadata and the patch list are generated.
+Before uploading APK assets, verify their package names and pinned signing certificates:
+
+```sh
+python scripts/verify-apk-signatures.py /path/to/release --java /path/to/java --build-tools /path/to/android-sdk/build-tools/35.0.0
+```
+
+Retain the existing Smart Launcher release key for future builds; stop if it is unavailable.
+Changing a patch does not require changing an app's signing key. Keep OB's existing key for both phone and watch.
 The ordinary bundle build requires no stock app files or other repository checkout.
 The isolated `integrations/openbubbles` build keeps the tested bridge dependency/linkage audit.
 Its `protocol` source is the same v4 wire contract as OB-wearos; synchronize both copies when changing it.
