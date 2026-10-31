@@ -3,7 +3,7 @@
 Morphe patches based on [Morphe's patches template](https://github.com/MorpheApp/morphe-patches-template).
 
 <!-- PATCHES_START -->
-> **[v1.0.0](https://github.com/MrCool-888/mrcool-patches/releases/tag/v1.0.0)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;3 patches total
+> **[v1.1.0](https://github.com/MrCool-888/mrcool-patches/releases/tag/v1.1.0)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;4 patches total
 <details open>
 <summary>📦 Smart Launcher&nbsp;&nbsp;•&nbsp;&nbsp;2 patches</summary>
 <br>
@@ -23,7 +23,7 @@ Morphe patches based on [Morphe's patches template](https://github.com/MorpheApp
 </details>
 
 <details open>
-<summary>📦 OpenBubbles&nbsp;&nbsp;•&nbsp;&nbsp;1 patch</summary>
+<summary>📦 OpenBubbles&nbsp;&nbsp;•&nbsp;&nbsp;2 patches</summary>
 <br>
 
 **Package name:** `com.openbubbles.messaging`
@@ -35,7 +35,8 @@ Morphe patches based on [Morphe's patches template](https://github.com/MorpheApp
 
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
-| [Wear companion bridge](#wear-companion-bridge) | Embeds the Wear companion directly in OpenBubbles; no separate phone app or notification access. |  |
+| [Ready for messages notification control](#ready-for-messages-notification-control) | Adds a setting to hide or show the background connection notification independently of the Wear bridge. |  |
+| [Wear companion bridge](#wear-companion-bridge) | Embeds the Wear companion in OpenBubbles and includes a background notification control; no separate phone app is needed. |  |
 
 </details>
 

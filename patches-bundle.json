@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-10-31T17:21:06",
-  "description": "## 1.0.0 (2026-10-31)\n\n### ✨ New Features\n\n* **SmartLauncher:** add Pro and support build 024 with Buds3 fix ([7429531](https://github.com/MrCool-888/mrcool-patches/commit/7429531de9da8a01308ddc8e97fcffb1ca673f2f))\n\n### 🐛 Bug Fixes\n\n* **SmartLauncher:** use the standard field reference API ([6f7ffb7](https://github.com/MrCool-888/mrcool-patches/commit/6f7ffb7bc5c67653fb36d83697d35818f9d22b83))",
-  "download_url": "https://github.com/MrCool-888/mrcool-patches/releases/download/v1.0.0/patches-1.0.0.mpp",
+  "created_at": "2026-10-31T21:47:16",
+  "description": "## [1.1.0](https://github.com/MrCool-888/mrcool-patches/compare/v1.0.0...v1.1.0) (2026-10-31)\n\n### ✨ New Features\n\n* add independent ready notification control ([496d91c](https://github.com/MrCool-888/mrcool-patches/commit/496d91c014406c7e11d939ea01e51e578c157723))",
+  "download_url": "https://github.com/MrCool-888/mrcool-patches/releases/download/v1.1.0/patches-1.1.0.mpp",
   "signature_download_url": "",
-  "version": "1.0.0"
+  "version": "1.1.0"
 }

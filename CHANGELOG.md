@@ -1,3 +1,9 @@
+## [1.1.0](https://github.com/MrCool-888/mrcool-patches/compare/v1.0.0...v1.1.0) (2026-10-31)
+
+### ✨ New Features
+
+* add independent ready notification control ([496d91c](https://github.com/MrCool-888/mrcool-patches/commit/496d91c014406c7e11d939ea01e51e578c157723))
+
 ## 1.0.0 (2026-10-31)
 
 ### ✨ New Features
