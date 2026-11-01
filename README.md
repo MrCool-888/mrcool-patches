@@ -3,7 +3,7 @@
 Morphe patches based on [Morphe's patches template](https://github.com/MorpheApp/morphe-patches-template).
 
 <!-- PATCHES_START -->
-> **[v1.1.0](https://github.com/MrCool-888/mrcool-patches/releases/tag/v1.1.0)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;4 patches total
+> **[v1.1.1](https://github.com/MrCool-888/mrcool-patches/releases/tag/v1.1.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;4 patches total
 <details open>
 <summary>📦 Smart Launcher&nbsp;&nbsp;•&nbsp;&nbsp;2 patches</summary>
 <br>
@@ -12,8 +12,8 @@ Morphe patches based on [Morphe's patches template](https://github.com/MorpheApp
 
 **🎯 Supported versions:**
 
-| 6.6 build 020 | 6.6 build 024 |
-| :---: | :---: |
+| 6.6 build 024 |
+| :---: |
 
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|

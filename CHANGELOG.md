@@ -1,3 +1,9 @@
+## [1.1.1](https://github.com/MrCool-888/mrcool-patches/compare/v1.1.0...v1.1.1) (2026-11-01)
+
+### 🐛 Bug Fixes
+
+* **SmartLauncher:** limit supported version to build 024 ([1fdf402](https://github.com/MrCool-888/mrcool-patches/commit/1fdf40238fde31f0bb08e6e9efe5fc978b6b41a3))
+
 ## [1.1.0](https://github.com/MrCool-888/mrcool-patches/compare/v1.0.0...v1.1.0) (2026-10-31)
 
 ### ✨ New Features
