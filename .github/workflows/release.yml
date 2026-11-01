@@ -75,7 +75,7 @@ jobs:
         run: ./gradlew :patches:buildAndroid --no-daemon
 
       - name: Upload verified patch bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mrcool-patches
           path: patches/build/libs/patches-*.mpp
