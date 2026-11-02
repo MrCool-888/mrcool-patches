@@ -41,6 +41,15 @@ object EmbeddedRuntime {
 
     @JvmStatic fun diagnostics(context: Context): String = BridgeCoordinator.diagnostics(context)
 
+    @JvmStatic fun onTestAlert(timestamp: Long) {
+        handler.post { BridgeCoordinator.sendTestAlert(timestamp) }
+    }
+
+    @JvmStatic fun publishNotificationDismissal(context: Context, threadId: String, postedAt: Long): com.google.android.gms.tasks.Task<com.google.android.gms.wearable.DataItem>? {
+        return WatchLink.publishNotificationDismissal(context,
+            com.openbubbles.wear.protocol.NotificationDismissal(threadId = threadId, postedAt = postedAt))
+    }
+
     @JvmStatic fun clearCache(context: Context) {
         BridgeCoordinator.clearCache(context)
         onBackendChanged()

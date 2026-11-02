@@ -9,6 +9,14 @@ import org.json.JSONObject
 
 /** Backend-authoritative bridge; every action runs inside patched OpenBubbles. */
 object BridgeCoordinator {
+    fun dismissNotification(event: NotificationDismissal) {
+        if (!initialized || !event.isValid()) return
+        PatchBridgeClient.request(appContext, "dismissNotification",
+            JSONObject().put("threadId", event.threadId).put("postedAt", event.postedAt), 8_000) { reply ->
+            if (!reply.ok) Log.w("OBWearLink", "Could not dismiss matching phone notification")
+        }
+    }
+
     private const val MAX_SEND_LENGTH = 800
     private var initialized = false
     private lateinit var appContext: Context
@@ -373,10 +381,28 @@ object BridgeCoordinator {
 
     private fun publishThreadUpdate(thread: WireThread, alertMessageId: String? = null, hidePreview: Boolean = false) {
         if (!initialized || !prefs.relayEnabled) return
-        val transport = Wire.threadForTransport(thread)
-        WatchLink.putThread(appContext, transport)
-        WatchLink.broadcast(appContext, Protocol.PATH_UPDATE, Wire.encodeBytes(UpdatePayload(
-            thread = transport, alertMessageId = alertMessageId, hideAlertPreview = hidePreview)))
+        val update = liveUpdate(thread, alertMessageId, hidePreview)
+        WatchLink.putThread(appContext, update.thread)
+        WatchLink.broadcast(appContext, Protocol.PATH_UPDATE, Wire.encodeBytes(update))
+    }
+
+    internal fun liveUpdate(thread: WireThread, alertMessageId: String?, hidePreview: Boolean): UpdatePayload {
+        // History loads asynchronously; the phone may have unlocked since its native alert.
+        val eligibleAlertId = alertMessageId?.takeIf { BridgeInfo.shouldAlertWatch(appContext) }
+        return UpdatePayload(thread = Wire.threadForTransport(thread),
+            alertMessageId = eligibleAlertId, hideAlertPreview = hidePreview)
+    }
+
+    fun sendTestAlert(timestamp: Long) {
+        if (!initialized || !prefs.relayEnabled) {
+            Log.i("OBWearTest", "Test skipped: bridge not ready or disabled")
+            return
+        }
+        val thread = Protocol.testNotificationThread(timestamp)
+        val update = liveUpdate(thread, thread.messages.single().id, false)
+        Log.i("OBWearTest", "Forwarding test; eligible=${update.alertMessageId != null}")
+        // A test alert is transient: never publish it as chat history or a durable snapshot.
+        WatchLink.broadcast(appContext, Protocol.PATH_TEST_NOTIFICATION, Wire.encodeBytes(update))
     }
 
     private fun scheduleSync() {

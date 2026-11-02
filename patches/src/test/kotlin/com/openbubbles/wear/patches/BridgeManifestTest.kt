@@ -41,6 +41,11 @@ class BridgeManifestTest {
         assertEquals("true", evaluate("string($bridge/@*[local-name()='exported'])"))
         assertEquals("com.google.android.gms.wearable.MESSAGE_RECEIVED", evaluate("string($bridge/intent-filter/action/@*[local-name()='name'])"))
         assertEquals("0", evaluate("count($bridge/@*[local-name()='permission'])"))
+        assertEquals("1", evaluate("count($bridge/intent-filter/action[@*[local-name()='name']='com.google.android.gms.wearable.DATA_CHANGED'])"))
+        assertEquals("false", evaluate("string(/manifest/application/receiver[@*[local-name()='name']='$NOTIFICATION_RECEIVER']/@*[local-name()='exported'])"))
+        assertEquals("false", evaluate("string(/manifest/application/activity[@*[local-name()='name']='$NOTIFICATION_OPEN_ACTIVITY']/@*[local-name()='exported'])"))
+        assertEquals("true", evaluate("string(/manifest/application/activity[@*[local-name()='name']='$NOTIFICATION_OPEN_ACTIVITY']/@*[local-name()='noHistory'])"))
+        assertEquals("", evaluate("string(/manifest/application/activity[@*[local-name()='name']='$NOTIFICATION_OPEN_ACTIVITY']/@*[local-name()='taskAffinity'])"))
         val provider = "/manifest/application/provider[@*[local-name()='name']='$MEDIA_PROVIDER_NAME']"
         assertEquals("1", evaluate("count($provider)"))
         assertEquals(MEDIA_AUTHORITY, evaluate("string($provider/@*[local-name()='authorities'])"))
@@ -61,7 +66,7 @@ class BridgeManifestTest {
         assertEquals(1, document.getElementsByTagName("service").length)
         assertEquals(0, document.getElementsByTagName("provider").length)
         addBridgeToManifest(document)
-        assertEquals(1, document.getElementsByTagName("activity").length)
+        assertEquals(2, document.getElementsByTagName("activity").length)
         assertEquals(2, document.getElementsByTagName("service").length)
         assertEquals(1, document.getElementsByTagName("provider").length)
         assertFailsWith<PatchException> { addSettingsToManifest(document) }

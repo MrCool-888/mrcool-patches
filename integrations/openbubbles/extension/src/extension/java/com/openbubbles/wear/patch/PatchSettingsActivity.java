@@ -102,6 +102,16 @@ public final class PatchSettingsActivity extends Activity {
         diagnostics.setTextSize(14);
         diagnostics.setPadding(0, padding, 0, 0);
         content.addView(diagnostics);
+        TextView testNotificationDetail = new TextView(this);
+        testNotificationDetail.setText("Shows a fake message in 10 seconds. Lock your phone to test watch alerts, or leave it unlocked to test watch silence. No message is sent.");
+        testNotificationDetail.setTextSize(16);
+        testNotificationDetail.setPadding(0, padding, 0, 0);
+        content.addView(testNotificationDetail);
+        Button testNotification = new Button(this);
+        testNotification.setText("Send test notification");
+        testNotification.setOnClickListener(view -> android.widget.Toast.makeText(this,
+                TestNotifications.schedule(this), android.widget.Toast.LENGTH_LONG).show());
+        content.addView(testNotification);
         }
         ScrollView scroll = new ScrollView(this);
         scroll.addView(content);

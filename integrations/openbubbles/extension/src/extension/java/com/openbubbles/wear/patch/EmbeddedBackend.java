@@ -53,6 +53,10 @@ public final class EmbeddedBackend implements EmbeddedRuntime.Backend {
                             request, () -> BridgeOps.send(sendRequest));
                     break;
                 case "markRead": response = BridgeOps.markRead(context, request); break;
+                case "dismissNotification":
+                    PhoneNotificationReceiver.dismissMatching(context, request.optString("threadId"), request.optLong("postedAt"));
+                    response = new JSONObject().put("apiVersion", BridgeOps.API_VERSION).put("ok", true);
+                    break;
                 default: return error(requestId, "Unknown bridge operation.");
             }
             attachAvatar(response.optJSONObject("thread"));

@@ -8,6 +8,7 @@ import android.content.ComponentName
 import android.provider.Settings
 import android.widget.Switch
 import android.widget.TextView
+import android.widget.Button
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Before
@@ -36,6 +37,8 @@ class PatchSettingsTest {
         val controls = switches(controller.get().findViewById(android.R.id.content))
         assertEquals(1, controls.size)
         assertEquals("Hide ready-to-receive notification", controls.single().text)
+        assertFalse(buttons(controller.get().findViewById(android.R.id.content))
+            .any { it.text == "Send test notification" })
         controls.single().performClick()
         val intent = shadowOf(controller.get()).nextStartedActivity
         assertEquals(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS, intent.action)
@@ -43,6 +46,26 @@ class PatchSettingsTest {
         controller.pause().stop().destroy()
     }
 
+    @Test fun testNotificationButtonIsLastBridgeControlAndShowsScheduleFeedback() {
+        val controller = Robolectric.buildActivity(PatchSettingsActivity::class.java).setup()
+        val content = controller.get().findViewById<android.view.ViewGroup>(android.R.id.content)
+        val button = buttons(content).single { it.text == "Send test notification" }
+        val labels = mutableListOf<String>()
+        fun collect(view: android.view.View) {
+            when (view) {
+                is TextView -> labels += view.text.toString()
+                is Button -> labels += view.text.toString()
+            }
+            if (view is android.view.ViewGroup) for (index in 0 until view.childCount) collect(view.getChildAt(index))
+        }
+        collect(content)
+        assertEquals("Send test notification", labels.last())
+        assertTrue(labels.contains("Shows a fake message in 10 seconds. Lock your phone to test watch alerts, or leave it unlocked to test watch silence. No message is sent."))
+        button.performClick()
+        assertTrue(org.robolectric.shadows.ShadowToast.getTextOfLatestToast().toString()
+            .startsWith("Test notification in 10 seconds"))
+        controller.pause().stop().destroy()
+    }
     @Test fun defaultsEnabledAndPersistsWithoutRepatching() {
         assertTrue(PatchSettings.isEnabled(context))
         PatchSettings.setEnabled(context, false)
@@ -95,6 +118,12 @@ class PatchSettingsTest {
         assertEquals(NotificationManager.IMPORTANCE_NONE,
             manager.getNotificationChannel(PatchSettings.READY_NOTIFICATION_CHANNEL).importance)
         controller.pause().stop().destroy()
+    }
+
+    private fun buttons(view: android.view.View): List<Button> = when (view) {
+        is Button -> listOf(view)
+        is android.view.ViewGroup -> (0 until view.childCount).flatMap { buttons(view.getChildAt(it)) }
+        else -> emptyList()
     }
 
     private fun switches(view: android.view.View): List<Switch> = when (view) {

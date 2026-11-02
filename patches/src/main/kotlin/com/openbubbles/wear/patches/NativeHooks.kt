@@ -27,6 +27,10 @@ private const val EMBEDDED_HOOKS = "Lcom/openbubbles/wear/patch/EmbeddedHooks;"
 private val startHook = ImmutableMethodReference(
     EMBEDDED_HOOKS, "start", listOf("Landroid/content/Context;"), "V",
 )
+private val prepareNotificationHook = ImmutableMethodReference(
+    EMBEDDED_HOOKS, "prepareNotification",
+    listOf("Landroid/content/Context;", "Landroid/app/Notification;"), "V",
+)
 private val alertHook = ImmutableMethodReference(
     EMBEDDED_HOOKS,
     "onNotificationPosted",
@@ -37,6 +41,7 @@ private val alertHook = ImmutableMethodReference(
 /** Adds only the two native lifecycle hooks; all instructions are fingerprinted before mutation. */
 internal fun BytecodePatchContext.addEmbeddedHooks() {
     requireHookMethod("start(Landroid/content/Context;)V")
+    requireHookMethod("prepareNotification(Landroid/content/Context;Landroid/app/Notification;)V")
     requireHookMethod("onNotificationPosted(Landroid/content/Context;Landroid/app/Notification;Z)V")
     val app = classDefBy(APPLICATION)
     val onCreate = app.methods.filter { signature(it) == "onCreate()V" }
@@ -88,6 +93,10 @@ internal fun injectConversationNotifyHook(owner: MutableClass, originalMethod: M
     val shiftedNotifyIndex = index + 4
     val additions = preservedAlertHookInstructions(registerCount, notificationRegister)
     additions.forEachIndexed { offset, instruction -> grownImplementation.addInstruction(shiftedNotifyIndex + 1 + offset, instruction) }
+    // Android copies notification extras during notify(), so link dismissals before posting.
+    val prepare = preservedAlertHookInstructions(registerCount, notificationRegister).take(2) +
+        BuilderInstruction3rc(Opcode.INVOKE_STATIC_RANGE, registerCount, 2, prepareNotificationHook)
+    prepare.forEachIndexed { offset, instruction -> grownImplementation.addInstruction(shiftedNotifyIndex + offset, instruction) }
 }
 
 internal fun allocateRegisters(owner: MutableClass, method: MutableMethod, extraRegisters: Int): MutableMethod {

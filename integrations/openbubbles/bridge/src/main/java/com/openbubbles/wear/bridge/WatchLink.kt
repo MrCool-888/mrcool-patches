@@ -17,6 +17,15 @@ import com.openbubbles.wear.protocol.WireThread
  * Data Layer so a watch can show cached conversations while the phone is away.
  */
 object WatchLink {
+    fun publishNotificationDismissal(context: Context, event: com.openbubbles.wear.protocol.NotificationDismissal): com.google.android.gms.tasks.Task<com.google.android.gms.wearable.DataItem>? {
+        if (!event.isValid()) return null
+        val request = PutDataMapRequest.create(Protocol.notificationDismissalDataPath(event.threadId))
+        request.dataMap.putString(Protocol.DATA_KEY_JSON, Wire.encode(event))
+        request.setUrgent()
+        return Wearable.getDataClient(context).putDataItem(request.asPutDataRequest())
+            .addOnFailureListener { Log.w(TAG, "Could not sync notification dismissal", it) }
+    }
+
     private const val TAG = "OBWearLink"
     private const val PREFS_NAME = "openbubbles_wear_link"
     private const val KEY_URIS = "data_uris"

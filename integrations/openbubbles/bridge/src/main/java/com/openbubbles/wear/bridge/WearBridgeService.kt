@@ -7,6 +7,21 @@ import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
 
 class WearBridgeService : WearableListenerService() {
+    override fun onDataChanged(events: DataEventBuffer) {
+        try {
+            for (event in events) {
+                if (event.type != DataEvent.TYPE_CHANGED) continue
+                val path = event.dataItem.uri.path ?: continue
+                if (!path.startsWith(Protocol.DATA_DISMISS_PREFIX)) continue
+                val json = runCatching { DataMapItem.fromDataItem(event.dataItem).dataMap.getString(Protocol.DATA_KEY_JSON) }.getOrNull() ?: continue
+                val dismissal = Wire.decode<NotificationDismissal>(json) ?: continue
+                if (!dismissal.isValid() || path != Protocol.notificationDismissalDataPath(dismissal.threadId)) continue
+                BridgeCoordinator.init(applicationContext)
+                BridgeCoordinator.dismissNotification(dismissal)
+            }
+        } finally { events.release() }
+    }
+
     override fun onCreate() {
         super.onCreate()
         BridgeCoordinator.init(applicationContext)

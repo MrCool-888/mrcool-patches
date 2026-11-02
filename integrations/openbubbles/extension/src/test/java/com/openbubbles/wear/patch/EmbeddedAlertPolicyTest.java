@@ -1,6 +1,8 @@
 package com.openbubbles.wear.patch;
 
 import android.app.Application;
+import com.openbubbles.wear.protocol.Protocol;
+import android.os.PowerManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -69,6 +71,38 @@ public class EmbeddedAlertPolicyTest {
         };
         assertFalse(EmbeddedHooks.shouldForwardNotification(context,
                 new Notification.Builder(context, "messages").build(), false));
+    }
+
+    @Test public void screenOffWithoutSecureLockStillAllowsWatchAlerts() {
+        Context context = RuntimeEnvironment.getApplication();
+        setPhoneLocked(context, false);
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        manager.createNotificationChannel(new NotificationChannel("messages", "Messages", NotificationManager.IMPORTANCE_HIGH));
+        Notification notification = new Notification.Builder(context, "messages").build();
+        Shadows.shadowOf(context.getSystemService(PowerManager.class)).setIsInteractive(false);
+        assertTrue(EmbeddedHooks.shouldForwardNotification(context, notification, false));
+        Shadows.shadowOf(context.getSystemService(PowerManager.class)).setIsInteractive(true);
+        assertFalse(EmbeddedHooks.shouldForwardNotification(context, notification, false));
+    }
+
+    @Test public void dismissalLinkPreservesNativeNotificationAndWearOptions() {
+        Context context = RuntimeEnvironment.getApplication();
+        Notification notification = new Notification.Builder(context, "messages")
+                .setContentTitle("Conversation").setContentText("Preview")
+                .setWhen(1234L).setSmallIcon(android.R.drawable.ic_dialog_info)
+                .extend(new Notification.WearableExtender().setBridgeTag("native-tag"))
+                .build();
+        EmbeddedHooks.linkNotification(context, notification, "iMessage;-;person@example.com");
+        assertEquals("chat_iMessage;-;person@example.com", notification.extras.getString(Protocol.EXTRA_NOTIFICATION_THREAD));
+        assertNull(new Notification.WearableExtender(notification).getDismissalId());
+        assertEquals("native-tag", new Notification.WearableExtender(notification).getBridgeTag());
+        assertEquals("Conversation", notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString());
+        assertEquals("Preview", notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString());
+        assertEquals(1234L, notification.when);
+        assertNotNull(notification.deleteIntent);
+        assertNull(notification.extras.getParcelable(PhoneNotificationReceiver.ORIGINAL_DELETE));
+        EmbeddedHooks.linkNotification(context, notification, "12345678".repeat(8));
+        assertEquals("chat_" + "12345678".repeat(8), notification.extras.getString(Protocol.EXTRA_NOTIFICATION_THREAD));
     }
 
     private static void setPhoneLocked(Context context, boolean locked) {

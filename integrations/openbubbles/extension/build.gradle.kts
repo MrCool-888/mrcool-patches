@@ -74,6 +74,7 @@ dependencies {
     testImplementation(files(androidJar))
     testImplementation(files(appClassesJar))
     testImplementation(files(embeddedBridgeJar).builtBy(buildEmbeddedBridge))
+    testImplementation("com.google.android.gms:play-services-wearable:19.0.0")
     testImplementation("org.robolectric:robolectric:4.14.1")
 }
 tasks.named<JavaCompile>("compileTestJava") {
@@ -84,7 +85,9 @@ tasks.test {
     maxHeapSize = "2g"
     doFirst {
         // This JVM build must expose the classes inside Robolectric's Android AARs.
-        classpath = files(classpath.map {
+        // The DEX-derived host fixture is compile-only evidence, not executable GMS bytecode.
+        val googleRuntime = classpath.filter { it.path.contains("play-services-") }
+        classpath = files((googleRuntime + classpath).map {
             if (it.extension == "aar") zipTree(it).matching { include("classes.jar") } else it
         })
         // The stock/CLI fat jars embed older Guava classes that break Robolectric.

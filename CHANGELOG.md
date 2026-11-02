@@ -1,3 +1,10 @@
+## [1.1.2](https://github.com/MrCool-888/mrcool-patches/compare/v1.1.1...v1.1.2) (2026-11-01)
+
+### Fixes and improvements
+
+* Synchronize notification dismissal between phone and watch, and add a test notification in patch settings.
+* Keep Smart Launcher support limited to 6.6 build 024.
+
 ## [1.1.1](https://github.com/MrCool-888/mrcool-patches/compare/v1.1.0...v1.1.1) (2026-11-01)
 
 ### 🐛 Bug Fixes

@@ -59,6 +59,28 @@ class PatchBridgeIntegrationTest {
 
     private fun awaitResult(timeoutMs: Long = 5_000, ready: () -> Boolean) = await(timeoutMs, ready)
 
+    @Test fun phoneUseIsRecheckedWhenAnAsyncHistoryUpdateIsReady() {
+        val keyguard = shadowOf(context.getSystemService(android.app.KeyguardManager::class.java))
+        val power = shadowOf(context.getSystemService(android.os.PowerManager::class.java))
+        val incoming = com.openbubbles.wear.protocol.WireMessage(
+            id = "incoming", threadId = id, text = "Hello", timestamp = 1234, fromMe = false)
+        val thread = com.openbubbles.wear.protocol.WireThread(
+            id = id, title = "Conversation", unread = true, messages = listOf(incoming))
+        power.setIsInteractive(true)
+        keyguard.setKeyguardLocked(true)
+        assertEquals("incoming", BridgeCoordinator.liveUpdate(thread, "incoming", true).alertMessageId)
+        // The phone unlocks after its native notification but before history is ready.
+        keyguard.setKeyguardLocked(false)
+        val update = BridgeCoordinator.liveUpdate(thread, "incoming", true)
+        assertNull(update.alertMessageId)
+        assertEquals(listOf(incoming), update.thread.messages)
+        assertTrue(update.thread.unread)
+        assertTrue(update.hideAlertPreview)
+        power.setIsInteractive(false)
+        assertEquals("incoming", BridgeCoordinator.liveUpdate(thread, "incoming", false).alertMessageId)
+        assertNull(BridgeCoordinator.liveUpdate(thread, null, false).alertMessageId)
+    }
+
     @Test fun malformedAndWrongVersionBackendRepliesFailClosed() {
         for (response in listOf("not json", """{"apiVersion":2,"ok":true}""", """{"ok":true}""")) {
             backend.respond = { response }

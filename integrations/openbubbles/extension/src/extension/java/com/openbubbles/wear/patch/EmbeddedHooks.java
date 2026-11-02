@@ -1,7 +1,7 @@
 package com.openbubbles.wear.patch;
 
 import android.app.Notification;
-import android.app.KeyguardManager;
+import com.openbubbles.wear.bridge.BridgeInfo;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
@@ -77,14 +77,36 @@ public final class EmbeddedHooks {
         });
     }
 
+    public static void prepareNotification(Context context, Notification notification) {
+        try {
+            if (notification == null) return;
+            String shortcut = notification.getShortcutId();
+            if (shortcut == null || shortcut.isEmpty()) return;
+            String chatGuid = ChatNotifications.INSTANCE.chatGuidForShortcut(context, shortcut);
+            if (chatGuid == null || chatGuid.isEmpty()) return;
+            linkNotification(context, notification, chatGuid);
+        } catch (Throwable error) {
+            Log.w(TAG, "Could not link phone and watch notification dismissals", error);
+        }
+    }
+
+    static void linkNotification(Context context, Notification notification, String chatGuid) {
+        PhoneNotificationReceiver.prepare(context, notification, "chat_" + chatGuid);
+    }
+
     public static void onNotificationPosted(Context context, Notification notification, boolean silent) {
         try {
-            if (!shouldForwardNotification(context, notification, silent)) return;
+            if (notification == null) return;
             if (android.os.Build.VERSION.SDK_INT < 29) return;
             String shortcut = notification.getShortcutId();
             if (shortcut == null || shortcut.isEmpty()) return;
             String chatGuid = ChatNotifications.INSTANCE.chatGuidForShortcut(context, shortcut);
             if (chatGuid == null || chatGuid.isEmpty()) return;
+            if (PhoneNotificationReceiver.wasDismissed(context, "chat_" + chatGuid, notification.when)) {
+                PhoneNotificationReceiver.dismissMatching(context, "chat_" + chatGuid, notification.when);
+                return;
+            }
+            if (!shouldForwardNotification(context, notification, silent)) return;
             EmbeddedRuntime.onAlert(chatGuid, notification.when, SetupPrefs.INSTANCE.getHideTextPreviews());
         } catch (Throwable error) {
             Log.w(TAG, "Could not forward OpenBubbles notification to Wear", error);
@@ -93,8 +115,7 @@ public final class EmbeddedHooks {
 
     static boolean shouldForwardNotification(Context context, Notification notification, boolean silent) {
         if (silent || notification == null) return false;
-        KeyguardManager keyguard = context.getSystemService(KeyguardManager.class);
-        if (keyguard == null || !keyguard.isKeyguardLocked()) return false;
+        if (!BridgeInfo.shouldAlertWatch(context)) return false;
         android.app.NotificationManager manager = context.getSystemService(android.app.NotificationManager.class);
         if (manager == null || !manager.areNotificationsEnabled()) return false;
         android.app.NotificationChannel channel = manager.getNotificationChannel(notification.getChannelId());

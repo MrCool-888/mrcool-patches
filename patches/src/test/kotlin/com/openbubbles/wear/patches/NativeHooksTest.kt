@@ -27,6 +27,28 @@ class NativeHooksTest {
         assertEquals(0 to 6, conversationNotifyTarget(instructions))
     }
 
+    @Test fun `dismissal metadata is attached before Android copies the notification`() {
+        val ownerType = "Lcom/localob/messaging/app/notifications/ChatNotifications;"
+        val instructions = listOf<Instruction>(
+            BuilderInstruction35c(Opcode.INVOKE_VIRTUAL, 3, 4, 5, 6, 0, 0, notify),
+            BuilderInstruction35c(Opcode.INVOKE_VIRTUAL, 3, 7, 8, 9, 0, 0, notify),
+            BuilderInstruction10x(Opcode.RETURN_VOID),
+        )
+        val method = com.android.tools.smali.dexlib2.immutable.ImmutableMethod(
+            ownerType, "post", listOf("Landroid/content/Context;", "Ljava/lang/String;", "Z").map {
+                com.android.tools.smali.dexlib2.immutable.ImmutableMethodParameter(it, emptySet(), null)
+            }, "V", 2, emptySet(), emptySet(),
+            com.android.tools.smali.dexlib2.immutable.ImmutableMethodImplementation(24, instructions, emptyList(), emptyList()))
+        val owner = app.morphe.patcher.util.proxy.mutableTypes.MutableClass(
+            com.android.tools.smali.dexlib2.immutable.ImmutableClassDef(
+                ownerType, 1, "Ljava/lang/Object;", emptyList(), null, emptySet(), emptyList(), listOf(method)))
+        injectConversationNotifyHook(owner, owner.methods.single())
+        val calls = owner.directMethods.single().implementation!!.instructions.mapNotNull {
+            ((it as? ReferenceInstruction)?.reference as? com.android.tools.smali.dexlib2.iface.reference.MethodReference)?.name
+        }
+        assertEquals(listOf("prepareNotification", "notify", "onNotificationPosted", "notify"), calls)
+    }
+
     @Test fun `startup uses the Context argument rather than a reused p0 register`() {
         val start = ImmutableMethodReference("Lcom/localob/messaging/app/service/BackendForegroundService\$Companion;",
             "start", listOf("Landroid/content/Context;"), "V")
