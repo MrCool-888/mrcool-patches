@@ -57,7 +57,6 @@ The Wear bridge patch also includes this control for compatibility with existing
 
 The Wear companion bridge sends watch notifications while the phone is locked and synchronizes dismissal of matching phone and watch notifications. To check the connection, select the Wear companion bridge in Morphe and tap **Send test notification** at the bottom of OpenBubbles Settings → Morphe patches. The test does not send a real message.
 
-Only Buds3 Pro has device confirmation. The launcher signature compatibility dependency is included.
 
 ## Build
 
