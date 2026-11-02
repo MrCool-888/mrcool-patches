@@ -2,8 +2,14 @@
 
 Morphe patches based on [Morphe's patches template](https://github.com/MorpheApp/morphe-patches-template).
 
+## Downloads
+
+The [latest stable release](https://github.com/MrCool-888/mrcool-patches/releases/latest) includes the Morphe patch bundle, a patched OpenBubbles 2.0.0 universal phone APK, a patched Smart Launcher 6.6 build 024 ARM64 APK, the matching watch APK, and SHA-256 checksums. The watch app is also available from [OpenBubbles Wear releases](https://github.com/MrCool-888/OB-wearos/releases/latest).
+
+Add `https://github.com/MrCool-888/mrcool-patches` as a patch source in Morphe Manager, then select the patches you want for your app.
+
 <!-- PATCHES_START -->
-> **[v1.1.1](https://github.com/MrCool-888/mrcool-patches/releases/tag/v1.1.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;4 patches total
+> **[v1.1.2](https://github.com/MrCool-888/mrcool-patches/releases/tag/v1.1.2)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;4 patches total
 <details open>
 <summary>📦 Smart Launcher&nbsp;&nbsp;•&nbsp;&nbsp;2 patches</summary>
 <br>
@@ -48,6 +54,9 @@ The Ready for messages notification control can be selected without the Wear bri
 Settings → Morphe patches → Hide ready-to-receive notification to open Android's Background connection
 channel settings, then turn that channel off or on. This does not turn off incoming message notifications.
 The Wear bridge patch also includes this control for compatibility with existing patched installations.
+
+The Wear companion bridge sends watch notifications while the phone is locked and synchronizes dismissal of matching phone and watch notifications. To check the connection, select the Wear companion bridge in Morphe and tap **Send test notification** at the bottom of OpenBubbles Settings → Morphe patches. The test does not send a real message.
+
 Only Buds3 Pro has device confirmation. The launcher signature compatibility dependency is included.
 
 ## Build
@@ -62,8 +71,8 @@ GitHub Actions uses the template's repository-scoped token. Keep personal creden
 
 The bundle is `patches/build/libs/patches-<version>.mpp`. Apply it with Morphe Desktop/Manager.
 Add this repository as a patch source in Morphe Manager to receive updates.
-The release includes the combined `.mpp`, a patched Smart Launcher 6.6 build 024 ARM64 APK,
-the existing tested OpenBubbles phone/watch APKs, validation notes, and SHA-256 checksums.
+The release includes the combined `.mpp`, patched Smart Launcher and OpenBubbles phone APKs,
+the matching watch APK, and SHA-256 checksums.
 Smart Launcher release APKs keep the signing key used by the supplied build 024 APK.
 OpenBubbles phone/watch APKs keep their separate, existing shared key.
 The public certificate pins are in `apk-signing-certificates.json`; private keys stay local.
