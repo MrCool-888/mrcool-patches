@@ -1,3 +1,9 @@
+## [1.3.0](https://github.com/MrCool-888/mrcool-patches/compare/v1.2.0...v1.3.0) (2026-11-03)
+
+### ✨ New Features
+
+* add Icon Pack Studio 2.5 Unlock Pro patch ([#8](https://github.com/MrCool-888/mrcool-patches/issues/8)) ([d2a8d09](https://github.com/MrCool-888/mrcool-patches/commit/d2a8d096a54c472eb8f21bbac54adb11d9990c14))
+
 ## [1.1.2](https://github.com/MrCool-888/mrcool-patches/compare/v1.1.1...v1.1.2) (2026-11-01)
 
 ### Fixes and improvements

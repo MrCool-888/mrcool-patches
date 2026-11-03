@@ -9,7 +9,7 @@ The [latest stable release](https://github.com/MrCool-888/mrcool-patches/release
 Add `https://github.com/MrCool-888/mrcool-patches` as a patch source in Morphe Manager, then select the patches you want for your app.
 
 <!-- PATCHES_START -->
-> **[v1.1.2](https://github.com/MrCool-888/mrcool-patches/releases/tag/v1.1.2)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;4 patches total
+> **[v1.3.0](https://github.com/MrCool-888/mrcool-patches/releases/tag/v1.3.0)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;5 patches total
 <details open>
 <summary>📦 Smart Launcher&nbsp;&nbsp;•&nbsp;&nbsp;2 patches</summary>
 <br>
@@ -43,6 +43,23 @@ Add `https://github.com/MrCool-888/mrcool-patches` as a patch source in Morphe M
 |----------|----------------|-----------|
 | [Ready for messages notification control](#ready-for-messages-notification-control) | Adds a setting to hide or show the background connection notification independently of the Wear bridge. |  |
 | [Wear companion bridge](#wear-companion-bridge) | Embeds the Wear companion in OpenBubbles and includes a background notification control; no separate phone app is needed. |  |
+
+</details>
+
+<details open>
+<summary>📦 Icon Pack Studio&nbsp;&nbsp;•&nbsp;&nbsp;1 patch</summary>
+<br>
+
+**Package name:** `ginlemon.iconpackstudio`
+
+**🎯 Supported versions:**
+
+| 2.5 build 003 |
+| :---: |
+
+| 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
+|----------|----------------|-----------|
+| [Unlock Pro](#unlock-pro) | Unlocks Pro features that normally require a purchase. |  |
 
 </details>
 
