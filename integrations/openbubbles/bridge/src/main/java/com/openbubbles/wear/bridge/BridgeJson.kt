@@ -2,6 +2,8 @@ package com.openbubbles.wear.bridge
 
 import android.net.Uri
 import com.openbubbles.wear.protocol.Protocol
+import com.openbubbles.wear.protocol.MessageReaction
+import com.openbubbles.wear.protocol.MessageReference
 import com.openbubbles.wear.protocol.ThreadSummary
 import com.openbubbles.wear.protocol.WireMessage
 import com.openbubbles.wear.protocol.WireThread
@@ -98,7 +100,28 @@ internal object BridgeJson {
             attachment = attachment,
             mediaId = if (uri != null && mime != null) Protocol.mediaId(id, mime) else null,
             mediaMime = if (uri != null) mime else null,
-            sourceUri = uri?.toString()
+            sourceUri = uri?.toString(),
+            canReact = json.optBoolean("canReact"),
+            canReply = json.optBoolean("canReply"),
+            replyCount = json.optInt("replyCount", 0).coerceAtLeast(0),
+            reactions = json.optJSONArray("reactions")?.let { items ->
+                (0 until items.length()).mapNotNull { index ->
+                    val reaction = items.optJSONObject(index) ?: return@mapNotNull null
+                    val type = reaction.optString("type").takeIf { it.isNotBlank() && it.length <= 32 }
+                        ?: return@mapNotNull null
+                    val count = reaction.optInt("count")
+                    val part = reaction.optInt("partIndex", 0)
+                    if (count <= 0 || part !in 0..1024) return@mapNotNull null
+                    MessageReaction(type, count, reaction.optBoolean("fromMe"), part)
+                }
+            }.orEmpty(),
+            replyTo = json.optJSONObject("replyTo")?.let { quote ->
+                val target = quote.optString("messageId").takeIf { it.isNotBlank() && it.length <= 512 }
+                    ?: return@let null
+                MessageReference(target, quote.optString("text").take(160),
+                    quote.optString("sender").takeIf { it.isNotBlank() }?.take(254),
+                    quote.optBoolean("fromMe"), quote.optInt("partIndex", 0).coerceIn(0, 1024))
+            }
         )
     }
 

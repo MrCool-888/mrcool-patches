@@ -216,6 +216,39 @@ class PatchBridgeIntegrationTest {
         assertEquals(listOf("thread"), requests.map { it.getString("op") })
     }
 
+    @Test fun quotedSendCarriesItsExactTargetAndPartThroughTheBridge() {
+        backend.respond = { """{"apiVersion":1,"ok":true,"threadId":"iMessage;-;+15551234567",
+            "message":{"id":"reply","text":"Answer","timestamp":5,"fromMe":true,
+            "replyTo":{"messageId":"original","partIndex":2,"text":"Question"}}}""" }
+        var result: BridgeCoordinator.SendResult? = null
+        BridgeCoordinator.send("quoted", id, "Answer", replyToMessageId = "original", replyToPartIndex = 2) { result = it }
+        awaitResult { result != null }
+        assertNull(result!!.error)
+        val request = requests.single { it.optString("op") == "send" }
+        assertEquals("original", request.getString("replyToMessageId"))
+        assertEquals(2, request.getInt("replyToPartIndex"))
+        assertEquals("original", result!!.message!!.replyTo!!.messageId)
+    }
+
+    @Test fun reactionActionPreservesDesiredStateAndReturnsAuthoritativeReactions() {
+        backend.respond = { """{"apiVersion":1,"ok":true,
+            "thread":{"id":"iMessage;-;+15551234567","messages":[{"id":"original","text":"Hello",
+            "timestamp":1,"canReact":true,"reactions":[{"type":"love","count":2,"fromMe":true,"partIndex":1}]}]}}""" }
+        var result: com.openbubbles.wear.protocol.ActionResult? = null
+        val reaction = com.openbubbles.wear.protocol.ReactionRequest(requestId = "react", threadId = id,
+            messageId = "original", reaction = "love", remove = false, partIndex = 1)
+        BridgeCoordinator.react(reaction) { result = it }
+        awaitResult { result != null }
+        assertTrue(result!!.ok)
+        val request = requests.single { it.optString("op") == "reaction" }
+        assertEquals("original", request.getString("messageId"))
+        assertEquals("love", request.getString("reaction"))
+        assertFalse(request.getBoolean("remove"))
+        assertEquals(1, request.getInt("partIndex"))
+        assertEquals(2, result!!.message!!.reactions.single().count)
+        assertTrue(BridgeCoordinator.threadFor(id)!!.messages.single().reactions.single().fromMe)
+    }
+
     @Test fun malformedSuccessfulHistoryReportsTheBackendShapeError() {
         backend.respond = { """{"apiVersion":1,"ok":true,"thread":{"id":"$id","messages":"invalid"}}""" }
         var payload: ThreadPayload? = null

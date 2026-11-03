@@ -38,7 +38,9 @@ public final class EmbeddedBackend implements EmbeddedRuntime.Backend {
                         .put("enabled", false).toString();
             }
             if (op.equals("status") || op.equals("chats") || op.equals("thread") ||
-                    op.equals("send") || op.equals("markRead")) prepareBackend(!op.equals("status"));
+                    op.equals("send") || op.equals("markRead") || op.equals("reaction") ||
+                    op.equals("reactionEvents"))
+                prepareBackend(!op.equals("status"));
 
             JSONObject response;
             switch (op) {
@@ -52,6 +54,11 @@ public final class EmbeddedBackend implements EmbeddedRuntime.Backend {
                     response = SendJournal.run(context.getSharedPreferences("wear_send_journal", Context.MODE_PRIVATE),
                             request, () -> BridgeOps.send(sendRequest));
                     break;
+                case "reaction": response = BridgeOps.react(request); break;
+                case "reactionEvents":
+                    response = BridgeOps.reactionEvents(request)
+                            .put("hidePreview", com.localob.messaging.backend.prefs.SetupPrefs.INSTANCE.getHideTextPreviews());
+                    break;
                 case "markRead": response = BridgeOps.markRead(context, request); break;
                 case "dismissNotification":
                     PhoneNotificationReceiver.dismissMatching(context, request.optString("threadId"), request.optLong("postedAt"));
@@ -63,9 +70,17 @@ public final class EmbeddedBackend implements EmbeddedRuntime.Backend {
             org.json.JSONArray chats = response.optJSONArray("chats");
             if (chats != null) for (int i = 0; i < chats.length(); i++) attachAvatar(chats.optJSONObject(i));
             String encoded = response.toString();
-            return encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_RESPONSE_BYTES
-                    ? error(null, "The conversation is too large to transfer. Load a smaller recent history.")
-                    : encoded;
+            if (encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_RESPONSE_BYTES) {
+                if (op.equals("reaction") && response.optBoolean("ok")) {
+                    response.remove("message");
+                    response.remove("thread");
+                    response.put("historyUnavailable", true);
+                    encoded = response.toString();
+                }
+                if (encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_RESPONSE_BYTES)
+                    return error(null, "The conversation is too large to transfer. Load a smaller recent history.");
+            }
+            return encoded;
         } catch (Throwable t) {
             Log.w(TAG, "Embedded bridge request failed", t);
             return error(request == null ? null : request.optString("requestId", null), friendly(t));

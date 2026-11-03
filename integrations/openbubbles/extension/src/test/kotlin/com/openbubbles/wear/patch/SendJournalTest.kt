@@ -59,6 +59,23 @@ class SendJournalTest {
         }
     }
 
+    @Test fun reusedIdCannotChangeReplyTargetOrTurnAPlainSendIntoAReply() {
+        SendJournal.run(prefs, request()) { JSONObject().put("ok", true) }
+        assertThrows(IllegalArgumentException::class.java) {
+            SendJournal.run(prefs, request().put("replyToMessageId", "original")) {
+                fail("Changed reply target sent"); JSONObject()
+            }
+        }
+        val reply = request("reply").put("replyToMessageId", "original").put("replyToPartIndex", 1)
+        SendJournal.run(prefs, reply) { JSONObject().put("ok", true) }
+        for (changed in listOf(JSONObject(reply.toString()).put("replyToMessageId", "other"),
+            JSONObject(reply.toString()).put("replyToPartIndex", 2))) {
+            assertThrows(IllegalArgumentException::class.java) {
+                SendJournal.run(prefs, changed) { fail("Changed reply sent"); JSONObject() }
+            }
+        }
+    }
+
     @Test fun embeddedBackendRejectsWrongApiBeforeCallingOpenBubbles() {
         val backend = EmbeddedBackend(org.robolectric.RuntimeEnvironment.getApplication())
         val result = JSONObject(backend.execute("""{"apiVersion":99,"op":"send"}"""))

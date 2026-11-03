@@ -26,6 +26,9 @@ object BridgeCoordinator {
     private val handler = Handler(Looper.getMainLooper())
     private val syncRunnable = Runnable { publishSync() }
     private var discoveryRunning = false
+    private lateinit var reactionTracker: ReactionEventTracker
+    private var reactionRefreshInFlight = false
+    private var reactionRefreshPending = false
 
     data class SendResult(val threadId: String?, val error: String?, val message: WireMessage? = null,
         val retryable: Boolean = false)
@@ -36,6 +39,9 @@ object BridgeCoordinator {
         prefs = BridgePreferences(appContext)
         store = BridgeStore(appContext)
         mediaCache = MediaCache(appContext)
+        val seen = appContext.getSharedPreferences("wear_reaction_alerts", Context.MODE_PRIVATE)
+            .getString("seen", null)?.let { Wire.decode<List<String>>(it) }
+        reactionTracker = ReactionEventTracker(seen)
         initialized = true
         PatchBridgeClient.onAvailabilityChanged = { scheduleSync() }
     }
@@ -45,6 +51,7 @@ object BridgeCoordinator {
         PatchBridgeClient.probe(appContext, force = true) { ready ->
             publishSync()
             if (!ready) return@probe
+            refreshReactionEvents()
             maybeAutoDiscoverChats(appContext)
             store.snapshot().filter { it.directHistory }.forEach { previous ->
                 threadPayload(previous.id) { payload ->
@@ -54,6 +61,64 @@ object BridgeCoordinator {
                 }
             }
         }
+    }
+
+    @Synchronized
+    private fun refreshReactionEvents() {
+        if (!initialized || !prefs.relayEnabled) return
+        if (reactionRefreshInFlight) {
+            reactionRefreshPending = true
+            return
+        }
+        reactionRefreshInFlight = true
+        PatchBridgeClient.request(appContext, "reactionEvents", JSONObject(), 24_000) { reply ->
+            try {
+                val array = if (reply.ok) reply.json?.optJSONArray("events") else null
+                if (array != null) {
+                    val events = (0 until array.length()).mapNotNull { index ->
+                        val item = array.optJSONObject(index) ?: return@mapNotNull null
+                        val id = item.optString("id").takeIf { it.isNotBlank() && it.length <= 512 } ?: return@mapNotNull null
+                        val threadId = BridgeJson.canonicalId(item.optString("threadId"))
+                            ?.takeIf(Protocol::isChatGuid) ?: return@mapNotNull null
+                        val timestamp = item.optLong("timestamp", 0)
+                        val text = item.optString("text").take(300).takeIf(String::isNotBlank) ?: return@mapNotNull null
+                        ReactionEvent(id, threadId, timestamp,
+                            item.optString("sender").take(160).takeIf(String::isNotBlank), text, item.optBoolean("muted"))
+                    }
+                    val hidden = reply.json?.optBoolean("hidePreview", true) ?: true
+                    val fresh = reactionTracker.newEvents(events, System.currentTimeMillis())
+                    val saved = appContext.getSharedPreferences("wear_reaction_alerts", Context.MODE_PRIVATE)
+                        .edit().putString("seen", Wire.encode(reactionTracker.snapshot())).commit()
+                    if (!saved) return@request
+                    fresh.forEach { event ->
+                        if (event.muted || !reactionAlertsAllowed(event.threadId)) return@forEach
+                        threadPayload(event.threadId) { payload ->
+                            if (payload.error != null || !reactionAlertsAllowed(event.threadId)) return@threadPayload
+                            val thread = payload.thread ?: return@threadPayload
+                            val message = WireMessage(id = "reaction:${event.id}", threadId = thread.id,
+                                text = event.text, sender = event.sender, timestamp = event.timestamp)
+                            val alert = ReactionAlert(thread = Wire.threadForTransport(thread), event = message, hidePreview = hidden)
+                            WatchLink.broadcast(appContext, Protocol.PATH_REACTION_ALERT, Wire.encodeBytes(alert))
+                        }
+                    }
+                }
+            } finally {
+                val again = synchronized(this) {
+                    reactionRefreshInFlight = false
+                    reactionRefreshPending.also { reactionRefreshPending = false }
+                }
+                if (again) refreshReactionEvents()
+            }
+        }
+    }
+
+    private fun reactionAlertsAllowed(threadId: String): Boolean {
+        if (!initialized || !prefs.relayEnabled || !EmbeddedRuntime.enabled() || !BridgeInfo.shouldAlertWatch(appContext)) return false
+        val manager = appContext.getSystemService(android.app.NotificationManager::class.java) ?: return false
+        if (!manager.areNotificationsEnabled() ||
+            manager.getNotificationChannel("messages")?.importance == android.app.NotificationManager.IMPORTANCE_NONE) return false
+        val conversation = manager.getNotificationChannel("messages", threadId)
+        return conversation?.importance != android.app.NotificationManager.IMPORTANCE_NONE
     }
 
     fun onAlert(rawGuid: String, postedAt: Long, hidePreview: Boolean) {
@@ -134,9 +199,13 @@ object BridgeCoordinator {
         threadId: String,
         address: String?,
         text: String,
+        replyToMessageId: String?,
+        replyToPartIndex: Int,
         callback: (SendResult) -> Unit
     ) {
         val fields = JSONObject().put("requestId", requestId).put("threadId", threadId).put("text", text)
+        if (replyToMessageId != null) fields.put("replyToMessageId", replyToMessageId)
+            .put("replyToPartIndex", replyToPartIndex)
         val recipient = address ?: store.get(threadId)?.address
         if (!recipient.isNullOrBlank()) fields.put("address", recipient)
         PatchBridgeClient.request(appContext, "send", fields, 24_000) { reply ->
@@ -162,7 +231,12 @@ object BridgeCoordinator {
                     id = canonical, title = recipient ?: "Conversation", address = recipient,
                     isGroup = Protocol.isGroupGuid(canonical.removePrefix("chat_"))
                 )
-                val sent = message ?: recordSent(canonical, requestId, text)
+                val replyTo = replyToMessageId?.let { id ->
+                    val target = previous?.messages?.firstOrNull { it.id == id }
+                    MessageReference(id, target?.displayText?.take(160).orEmpty(), target?.sender,
+                        target?.fromMe == true, replyToPartIndex)
+                }
+                val sent = message ?: recordSent(canonical, requestId, text, replyTo)
                 storeBridgeThread(fallback.copy(messages = listOf(sent)))
             }
             prefs.markReadAt(canonical)
@@ -269,6 +343,7 @@ object BridgeCoordinator {
     }
 
     fun send(requestId: String, threadId: String?, rawText: String, address: String? = null,
+        replyToMessageId: String? = null, replyToPartIndex: Int = 0,
         callback: (SendResult) -> Unit) {
         if (!initialized) { callback(SendResult(threadId, "The bridge is still starting.")); return }
         if (!prefs.relayEnabled) { callback(SendResult(threadId, "Wear bridge is disabled in OpenBubbles settings.")); return }
@@ -282,13 +357,43 @@ object BridgeCoordinator {
         if (threadId.isNullOrBlank()) {
             callback(SendResult(null, "Open this chat in OpenBubbles on the phone first.")); return
         }
-        sendDirect(requestId, threadId, address, text, callback)
+        sendDirect(requestId, threadId, address, text, replyToMessageId, replyToPartIndex, callback)
     }
 
-    private fun recordSent(threadId: String, requestId: String, text: String): WireMessage {
+    fun react(request: ReactionRequest, callback: (ActionResult) -> Unit) {
+        fun complete(error: String?, message: WireMessage? = null) = callback(ActionResult(
+            requestId = request.requestId, action = Protocol.ACTION_REACTION,
+            ok = error == null, threadId = request.threadId, error = error, message = message))
+        if (!initialized || !prefs.relayEnabled) {
+            complete("Enable the Wear bridge in OpenBubbles first.")
+            return
+        }
+        if (!Protocol.isChatGuid(request.threadId) || request.messageId.isBlank() ||
+            request.messageId.length > 512 || Tapback.fromType(request.reaction) == null ||
+            request.partIndex !in 0..1024) {
+            complete("Invalid reaction target.")
+            return
+        }
+        val fields = JSONObject().put("requestId", request.requestId).put("threadId", request.threadId)
+            .put("messageId", request.messageId).put("reaction", request.reaction)
+            .put("remove", request.remove).put("partIndex", request.partIndex)
+        PatchBridgeClient.request(appContext, "reaction", fields, 28_000) { reply ->
+            if (!reply.ok) {
+                complete(reply.error ?: "Could not send the reaction.")
+                return@request
+            }
+            val thread = BridgeJson.thread(reply.json?.optJSONObject("thread"))
+                ?.takeIf { it.id == request.threadId }?.let(::storeBridgeThread)
+            val message = BridgeJson.message(reply.json?.optJSONObject("message"), request.threadId)
+            thread?.let { publishThreadUpdate(decorate(it)) }
+            complete(null, thread?.messages?.firstOrNull { it.id == request.messageId } ?: message)
+        }
+    }
+
+    private fun recordSent(threadId: String, requestId: String, text: String, replyTo: MessageReference? = null): WireMessage {
         val message = WireMessage(id = BridgeStore.OPTIMISTIC_MESSAGE_PREFIX + requestId,
             threadId = threadId, text = text, timestamp = System.currentTimeMillis(),
-            fromMe = true, status = "unconfirmed")
+            fromMe = true, status = "unconfirmed", replyTo = replyTo)
         store.mergeHistory(threadId, listOf(message))
         return message
     }

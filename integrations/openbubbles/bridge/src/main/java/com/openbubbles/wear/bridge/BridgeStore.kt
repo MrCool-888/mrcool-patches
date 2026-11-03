@@ -137,6 +137,8 @@ class BridgeStore(context: Context) {
                     candidate.id.startsWith(OPTIMISTIC_MESSAGE_PREFIX) &&
                         candidate.fromMe &&
                         candidate.text == incoming.text &&
+                        candidate.replyTo?.messageId == incoming.replyTo?.messageId &&
+                        candidate.replyTo?.partIndex == incoming.replyTo?.partIndex &&
                         abs(candidate.timestamp - incoming.timestamp) <= AUTO_MATCH_WINDOW_MS
                 }
                 if (optimistic != null) byId.remove(optimistic.id)
