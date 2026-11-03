@@ -15,14 +15,18 @@ import com.localob.messaging.backend.db.Chat_;
 import com.localob.messaging.backend.db.Database;
 import com.localob.messaging.backend.db.Message_;
 import com.localob.messaging.backend.domain.BackendService;
+import com.localob.messaging.backend.domain.AssociatedMessage;
 import com.localob.messaging.backend.domain.Chat;
 import com.localob.messaging.backend.domain.ContentRun;
 import com.localob.messaging.backend.domain.DeliveryState;
 import com.localob.messaging.backend.domain.Message;
 import com.localob.messaging.backend.domain.MessageContent;
+import com.localob.messaging.backend.domain.MessageRef;
+import com.localob.messaging.backend.domain.ReactionKind;
 import com.localob.messaging.backend.domain.RunFormat;
 
 import io.objectbox.query.Query;
+import io.objectbox.query.QueryCondition;
 import io.objectbox.query.QueryBuilder;
 
 import org.json.JSONArray;
@@ -59,6 +63,7 @@ final class BridgeOps {
     private static final int MAX_CHAT_OFFSET = 5000;
     private static final int DEFAULT_MESSAGE_LIMIT = 80;
     private static final int MAX_MESSAGE_LIMIT = 240;
+    private static final int MAX_REACTION_EVENTS = 256;
     static final int MAX_TEXT_LENGTH = 800;
     static final int MAX_COLLECTION_CHARS = 120_000;
     private static final int MAX_PARTICIPANTS = 32;
@@ -216,22 +221,52 @@ final class BridgeOps {
         }
         Chat chat;
         Message message;
+        Message replyTarget = null;
+        MessageRef replyRef = null;
         String guid;
         try {
-            chat = resolve(backend,
-                    request.optString("threadId", null),
-                    request.optString("address", null), true);
+            boolean quotes = request.has("replyToMessageId") && !request.isNull("replyToMessageId");
+            String requestedReplyId = quotes ? request.optString("replyToMessageId", null) : null;
+            int requestedReplyPart = request.optInt("replyToPartIndex", 0);
+            String requestedThread = request.optString("threadId", null);
+            if (quotes && (blank(requestedReplyId) || requestedReplyId.length() > 512 || hasControl(requestedReplyId) ||
+                    requestedReplyPart < 0 || requestedReplyPart > 1024 || guidFromThreadId(requestedThread) == null)) {
+                out.put("ok", false);
+                out.put("error", "Choose a message in an existing conversation to reply to.");
+                return out;
+            }
+            chat = resolve(backend, requestedThread, quotes ? null : request.optString("address", null), !quotes);
             if (chat == null) {
                 out.put("ok", false);
-                out.put("error", guidFromThreadId(request.optString("threadId", null)) != null
+                out.put("error", guidFromThreadId(requestedThread) != null
                         ? "Conversation not found. Refresh your conversations."
                         : "Enter a phone number or email address, like +15551234567 or name@example.com.");
                 return out;
             }
+            if (quotes) {
+                if (!chat.isIMessage()) {
+                    out.put("ok", false);
+                    out.put("error", "Replies are unavailable for this conversation.");
+                    return out;
+                }
+                replyTarget = (Message) Await.await(
+                        continuation -> chat.messageById(requestedReplyId, continuation), OP_TIMEOUT_MS);
+                if (!isMessageTarget(replyTarget, chat.getGuid())) {
+                    out.put("ok", false);
+                    out.put("error", "The quoted message is unavailable in this conversation.");
+                    return out;
+                }
+                replyRef = resolveReplyReference(replyTarget, requestedReplyPart);
+                if (replyRef == null || blank(replyRef.getMessageId()) || replyRef.getMessageId().length() > 512) {
+                    out.put("ok", false);
+                    out.put("error", "The quoted message is unavailable in this conversation.");
+                    return out;
+                }
+            }
             MessageContent content = new MessageContent(
                     Collections.singletonList(new ContentRun.Text(text, RunFormat.Companion.getPlain())),
                     Collections.emptyList(),
-                    null, null, null, null, false);
+                    null, replyRef, null, null, false);
             guid = chat.getGuid();
             if (!validChatGuid(guid)) throw new IllegalStateException("Invalid backend conversation ID.");
             message = (Message) Await.await(
@@ -243,7 +278,13 @@ final class BridgeOps {
         out.put("ok", true);
         out.put("threadId", guid);
         try {
-            out.put("message", messageJson(message));
+            com.localob.messaging.backend.db.Chat chatEntity = findChatEntity(guid);
+            JSONObject sentMessage = messageJson(message, names(), new JSONArray(), chatEntity);
+            if (sentMessage != null && replyRef != null) {
+                sentMessage.put("replyTo", replyReferenceJson(chatEntity, replyRef, names()));
+                if (chatEntity != null && supportsReactions(chatEntity)) sentMessage.put("canReply", true);
+            }
+            out.put("message", sentMessage);
         } catch (Throwable t) {
             Log.w(TAG, "Sent message could not be serialized", t);
             out.put("historyUnavailable", true);
@@ -283,6 +324,364 @@ final class BridgeOps {
             return failure(out, t);
         }
         return out;
+    }
+
+    static JSONObject react(JSONObject request) throws Exception {
+        return react(backend(), request);
+    }
+
+    static JSONObject react(BackendService backend, JSONObject request) throws Exception {
+        JSONObject out = baseResponse(request.optString("requestId", null));
+        if (backend == null) return notReady(out);
+        Chat chat;
+        com.localob.messaging.backend.db.Message target;
+        com.localob.messaging.backend.db.Chat chatEntity;
+        List<com.localob.messaging.backend.db.Message> reactionRows;
+        ReactionKind.Standard reaction = reactionKind(request.optString("reaction", ""));
+        int partIndex = request.optInt("partIndex", 0);
+        if (reaction == null || partIndex < 0 || partIndex > 1024) {
+            out.put("ok", false);
+            out.put("error", "Choose one of the supported reactions and a valid message part.");
+            return out;
+        }
+        try {
+            chat = resolve(backend, request.optString("threadId", null), null, false);
+            if (chat == null) {
+                out.put("ok", false);
+                out.put("error", "Reactions are unavailable for this conversation.");
+                return out;
+            }
+            String messageId = request.optString("messageId", null);
+            if (blank(messageId) || messageId.length() > 512 || hasControl(messageId)) {
+                out.put("ok", false);
+                out.put("error", "Message not found.");
+                return out;
+            }
+            try (Query<com.localob.messaging.backend.db.Chat> query = Database.INSTANCE.getChats()
+                    .query().equal(Chat_.guid, chat.getGuid(), QueryBuilder.StringOrder.CASE_SENSITIVE).build()) {
+                chatEntity = query.findUnique();
+            }
+            if (chatEntity == null) {
+                out.put("ok", false);
+                out.put("error", "Conversation not found.");
+                return out;
+            }
+            if (!supportsReactions(chatEntity)) {
+                out.put("ok", false);
+                out.put("error", "Reactions are unavailable for this conversation.");
+                return out;
+            }
+            try (Query<com.localob.messaging.backend.db.Message> query = Database.INSTANCE.getMessages()
+                    .query().equal(Message_.chatId, chatEntity.getId())
+                    .equal(Message_.guid, messageId, QueryBuilder.StringOrder.CASE_SENSITIVE).build()) {
+                target = query.findUnique();
+            }
+            if (!isReactableTarget(target, chat.getGuid())) {
+                out.put("ok", false);
+                out.put("error", "Message not found or reactions are unavailable.");
+                return out;
+            }
+            reactionRows = reactionRows(chatEntity, Collections.singletonList(target.getGuid()));
+            applyReaction(target, reactionRows, reaction, partIndex, request.optBoolean("remove", false));
+        } catch (Throwable t) {
+            return failure(out, t);
+        }
+
+        // The native mutation is acknowledged. Serialization failures must not invite a duplicate reaction.
+        out.put("ok", true);
+        out.put("threadId", chat.getGuid());
+        try {
+            reactionRows = reactionRows(chatEntity, Collections.singletonList(target.getGuid()));
+            JSONObject updated = messageJson(target, names(), summarizeReactions(target.getGuid(), reactionRows), chatEntity);
+            if (updated != null) updated.put("replyCount", replyCounts(chatEntity).getOrDefault(target.getGuid(), 0));
+            out.put("message", updated);
+        } catch (Throwable t) {
+            Log.w(TAG, "Reaction updated; message refresh unavailable", t);
+            out.put("historyUnavailable", true);
+        }
+        try {
+            out.put("thread", threadJson(chat, DEFAULT_MESSAGE_LIMIT));
+        } catch (Throwable t) {
+            Log.w(TAG, "Reaction updated; history refresh unavailable", t);
+            out.put("historyUnavailable", true);
+        }
+        return out;
+    }
+
+    static JSONObject reactionEvents(JSONObject request) throws Exception {
+        JSONObject out = baseResponse(request.optString("requestId", null));
+        BackendService backend = backend();
+        if (backend == null) return notReady(out);
+        JSONArray events = new JSONArray();
+        ChatNames chatNames = names();
+        try (Query<com.localob.messaging.backend.db.Message> query = Database.INSTANCE.getMessages().query()
+                .notNull(Message_.associatedMessageType)
+                .orderDesc(Message_.dateCreated).build()) {
+            for (com.localob.messaging.backend.db.Message row : query.find(0, MAX_REACTION_EVENTS)) {
+                if (row.getDateDeleted() != null || !Boolean.FALSE.equals(row.isFromMe()) ||
+                        !row.getReactionEnabled()) continue;
+                String id = row.getGuid();
+                String targetGuid = row.getTargetGuid();
+                String sender = row.getSender();
+                Date created = row.getDateCreated();
+                if (blank(id) || blank(targetGuid) || created == null || created.getTime() <= 0)
+                    continue;
+                com.localob.messaging.backend.db.Chat chat = row.getChat() == null ? null : row.getChat().getTarget();
+                if (!supportsReactions(chat) || !chat.getGuid().equals(row.getChatGuid())) continue;
+                // ObjectBox fills mute fields after constructing the entity's flow.
+                chat.refreshMuted();
+                boolean muted = Boolean.TRUE.equals(chat.isMutedFlow().getValue());
+                com.localob.messaging.backend.db.Message target;
+                try (Query<com.localob.messaging.backend.db.Message> targetQuery = Database.INSTANCE.getMessages().query()
+                        .equal(Message_.chatId, chat.getId())
+                        .equal(Message_.guid, targetGuid, QueryBuilder.StringOrder.CASE_SENSITIVE)
+                        .isNull(Message_.associatedMessageType).isNull(Message_.dateDeleted).build()) {
+                    target = targetQuery.findUnique();
+                }
+                if (target == null || !isReactableTarget(target, chat.getGuid())) continue;
+                JSONObject event = reactionEventJson(id, chat.getGuid(), created.getTime(),
+                        blank(sender) ? "Someone" : chatNames.sender(sender), row.getReaction(), row.getReactionEnabled(),
+                        Boolean.TRUE.equals(row.isFromMe()), targetGuid, target.getGuid(), preview(target));
+                if (event != null) events.put(event.put("muted", muted));
+            }
+        }
+        out.put("ok", true);
+        out.put("events", events);
+        return out;
+    }
+
+    static JSONObject reactionEventJson(String id, String threadId, long timestamp, String sender,
+                                        ReactionKind reaction, boolean enabled, boolean fromMe,
+                                        String targetGuid, String expectedTargetGuid, String targetText) throws Exception {
+        String emoji = reactionEmoji(reaction);
+        if (blank(id) || blank(threadId) || timestamp <= 0 || blank(sender) || fromMe || !enabled ||
+                blank(targetGuid) || !targetGuid.equals(expectedTargetGuid) || emoji == null) return null;
+        String preview = blank(targetText) ? "message" : targetText.trim();
+        return new JSONObject().put("id", bounded(id, 512)).put("threadId", threadId)
+                .put("timestamp", timestamp).put("sender", bounded(sender, 160))
+                .put("text", bounded(emoji + " to: " + preview, 160));
+    }
+
+    private static String reactionEmoji(ReactionKind reaction) {
+        if (reaction == ReactionKind.Standard.LOVE) return "❤️";
+        if (reaction == ReactionKind.Standard.LIKE) return "👍";
+        if (reaction == ReactionKind.Standard.DISLIKE) return "👎";
+        if (reaction == ReactionKind.Standard.LAUGH) return "😂";
+        if (reaction == ReactionKind.Standard.EMPHASIZE) return "‼️";
+        if (reaction == ReactionKind.Standard.QUESTION) return "❓";
+        if (reaction == ReactionKind.Sticker.INSTANCE) return "🏷️";
+        if (reaction instanceof ReactionKind.Emoji) {
+            String emoji = ((ReactionKind.Emoji) reaction).getEmoji();
+            return blank(emoji) ? null : emoji;
+        }
+        return null;
+    }
+
+    static ReactionKind.Standard reactionKind(String value) {
+        if (value == null) return null;
+        switch (value) {
+            case "love": return ReactionKind.Standard.LOVE;
+            case "like": return ReactionKind.Standard.LIKE;
+            case "dislike": return ReactionKind.Standard.DISLIKE;
+            case "laugh": return ReactionKind.Standard.LAUGH;
+            case "emphasize": return ReactionKind.Standard.EMPHASIZE;
+            case "question": return ReactionKind.Standard.QUESTION;
+            default: return null;
+        }
+    }
+
+    static String reactionType(ReactionKind reaction) {
+        if (reaction == ReactionKind.Standard.LOVE) return "love";
+        if (reaction == ReactionKind.Standard.LIKE) return "like";
+        if (reaction == ReactionKind.Standard.DISLIKE) return "dislike";
+        if (reaction == ReactionKind.Standard.LAUGH) return "laugh";
+        if (reaction == ReactionKind.Standard.EMPHASIZE) return "emphasize";
+        if (reaction == ReactionKind.Standard.QUESTION) return "question";
+        return null;
+    }
+
+    private static String reactionStateKey(ReactionKind reaction) {
+        String type = reactionType(reaction);
+        if (type != null) return type;
+        if (reaction instanceof ReactionKind.Emoji)
+            return "emoji:" + ((ReactionKind.Emoji) reaction).getEmoji();
+        if (reaction == ReactionKind.Sticker.INSTANCE) return "stickerback";
+        return null;
+    }
+
+    private static boolean supportsReactions(com.localob.messaging.backend.db.Chat chat) {
+        return chat != null && chat.isIMessage();
+    }
+
+    static boolean isReactableTarget(com.localob.messaging.backend.db.Message target, String chatGuid) {
+        if (!isMessageTarget(target, chatGuid)) return false;
+        try { return supportsReactions(target.getChat().getTarget()); }
+        catch (Throwable ignored) { return false; }
+    }
+
+    static boolean isMessageTarget(Message target, String chatGuid) {
+        if (target == null || blank(chatGuid) || blank(target.getGuid()) || target.getGuid().length() > 512 ||
+                !chatGuid.equals(target.getChatGuid())) return false;
+        if (target instanceof com.localob.messaging.backend.db.Message) {
+            com.localob.messaging.backend.db.Message entity = (com.localob.messaging.backend.db.Message) target;
+            return entity.getDateDeleted() == null && entity.getAssociatedMessageType() == null;
+        }
+        if (target instanceof com.localob.messaging.backend.domain.AssociatedMessage &&
+                ((com.localob.messaging.backend.domain.AssociatedMessage) target).getTargetGuid() != null) return false;
+        try { return target.getDateDeletedFlow().getValue() == null; }
+        catch (Throwable ignored) { return false; }
+    }
+
+    static MessageRef resolveReplyReference(Message target, int partIndex) {
+        return com.localob.messaging.app.messaging.ReplyThreadingKt.resolveReplyTarget(target, partIndex);
+    }
+
+    private static List<com.localob.messaging.backend.db.Message> reactionRows(
+            com.localob.messaging.backend.db.Chat chat, List<String> targetGuids) {
+        QueryCondition<com.localob.messaging.backend.db.Message> targets = null;
+        for (String targetGuid : targetGuids) {
+            QueryCondition<com.localob.messaging.backend.db.Message> condition =
+                    Message_.associatedMessageGuid.equal(targetGuid);
+            targets = targets == null ? condition : targets.or(condition);
+        }
+        if (targets == null) return Collections.emptyList();
+        try (Query<com.localob.messaging.backend.db.Message> query = Database.INSTANCE.getMessages().query()
+                .equal(Message_.chatId, chat.getId()).apply(targets)
+                .notNull(Message_.associatedMessageType).build()) {
+            return query.find();
+        }
+    }
+
+    static void applyReaction(Message target, List<? extends AssociatedMessage> rows,
+                              ReactionKind.Standard reaction, int partIndex, boolean remove) throws Exception {
+        ActiveReaction current = ownReaction(target.getGuid(), rows, partIndex);
+        String wanted = reactionType(reaction);
+        if (wanted == null) throw new IllegalArgumentException("Unsupported reaction.");
+        if (remove) {
+            if (current != null && wanted.equals(current.type))
+                Await.await(c -> target.react(reaction, partIndex, false, c), OP_TIMEOUT_MS);
+        } else if (current == null || !wanted.equals(current.key)) {
+            if (current != null && current.kind != null) {
+                ReactionKind old = current.kind;
+                Await.await(c -> target.react(old, partIndex, false, c), OP_TIMEOUT_MS);
+            }
+            Await.await(c -> target.react(reaction, partIndex, true, c), OP_TIMEOUT_MS);
+        }
+    }
+
+    private static ActiveReaction ownReaction(String targetGuid, List<? extends AssociatedMessage> rows, int partIndex) {
+        for (ActiveReaction reaction : activeReactions(targetGuid, rows).values())
+            if (reaction.fromMe && reaction.part == partIndex) return reaction;
+        return null;
+    }
+
+    private static int reactionPart(AssociatedMessage row) {
+        Integer part = row.getTargetPartIndex();
+        return part == null ? 0 : part;
+    }
+
+    private static List<AssociatedMessage> orderedReactions(List<? extends AssociatedMessage> rows, String targetGuid) {
+        List<AssociatedMessage> out = new ArrayList<>();
+        if (rows != null) for (AssociatedMessage row : rows) {
+            if (row instanceof com.localob.messaging.backend.db.Message &&
+                    ((com.localob.messaging.backend.db.Message) row).getDateDeleted() != null) continue;
+            if (targetGuid.equals(row.getTargetGuid()) && row.getReaction() != null) {
+                out.add(row);
+            }
+        }
+        Collections.sort(out, (left, right) -> {
+            int byTime = Long.compare(reactionTime(left), reactionTime(right));
+            if (byTime != 0) return byTime;
+            if (left instanceof com.localob.messaging.backend.db.Message && right instanceof com.localob.messaging.backend.db.Message)
+                return Long.compare(
+                    ((com.localob.messaging.backend.db.Message) left).getId(),
+                    ((com.localob.messaging.backend.db.Message) right).getId());
+            return left.getGuid().compareTo(right.getGuid());
+        });
+        return out;
+    }
+
+    private static long reactionTime(AssociatedMessage row) {
+        if (row instanceof com.localob.messaging.backend.db.Message) {
+            Date date = ((com.localob.messaging.backend.db.Message) row).getDateCreated();
+            return date == null ? 0L : date.getTime();
+        }
+        return row.getTimestamp().toEpochMilliseconds();
+    }
+
+    private static final class ActiveReaction {
+        final String key;
+        final String type;
+        final boolean fromMe;
+        final int part;
+        final ReactionKind kind;
+
+        ActiveReaction(String key, String type, boolean fromMe, int part, ReactionKind kind) {
+            this.key = key;
+            this.type = type;
+            this.fromMe = fromMe;
+            this.part = part;
+            this.kind = kind;
+        }
+    }
+
+    private static java.util.Map<String, ActiveReaction> activeReactions(
+            String targetGuid, List<? extends AssociatedMessage> rows) {
+        java.util.Map<String, ActiveReaction> active = new java.util.LinkedHashMap<>();
+        for (AssociatedMessage row : orderedReactions(rows, targetGuid)) {
+            ReactionKind kind = row.getReaction();
+            String reactionKey = reactionStateKey(kind);
+            if (reactionKey == null) continue;
+            String type = reactionType(kind);
+            String sender = Boolean.TRUE.equals(row.isFromMe()) ? "\u0000me" : row.getSender();
+            if (blank(sender)) sender = "\u0000unknown:" + row.getGuid();
+            int part = reactionPart(row);
+            String key = sender + "\u0000" + part;
+            if (!row.getReactionEnabled()) {
+                ActiveReaction old = active.get(key);
+                if (old != null && old.key.equals(reactionKey)) active.remove(key);
+            } else {
+                active.put(key, new ActiveReaction(reactionKey, type, Boolean.TRUE.equals(row.isFromMe()), part, kind));
+            }
+        }
+        return active;
+    }
+
+    static JSONArray summarizeReactions(String targetGuid, List<? extends AssociatedMessage> rows) throws Exception {
+        class Count { int value; boolean own; int part; }
+        java.util.Map<String, Count> counts = new java.util.TreeMap<>();
+        for (ActiveReaction value : activeReactions(targetGuid, rows).values()) {
+            String key = value.part + "\u0000" + value.key;
+            Count count = counts.get(key);
+            if (count == null) { count = new Count(); count.part = value.part; counts.put(key, count); }
+            count.value++;
+            count.own |= value.fromMe;
+        }
+        JSONArray result = new JSONArray();
+        for (java.util.Map.Entry<String, Count> entry : counts.entrySet()) {
+            String type = entry.getKey().substring(entry.getKey().indexOf('\u0000') + 1);
+            Count count = entry.getValue();
+            result.put(new JSONObject().put("type", type).put("count", count.value)
+                    .put("fromMe", count.own).put("partIndex", count.part));
+        }
+        return result;
+    }
+
+    private static java.util.Map<String, List<AssociatedMessage>> groupReactionRows(List<com.localob.messaging.backend.db.Message> rows) {
+        java.util.Map<String, List<AssociatedMessage>> grouped = new java.util.HashMap<>();
+        for (com.localob.messaging.backend.db.Message row : rows) {
+            String target = row.getTargetGuid();
+            if (blank(target) || row.getReaction() == null || row.getDateDeleted() != null) continue;
+            List<AssociatedMessage> messages = grouped.get(target);
+            if (messages == null) { messages = new ArrayList<>(); grouped.put(target, messages); }
+            messages.add(row);
+        }
+        return grouped;
+    }
+
+    private static boolean hasControl(String value) {
+        for (int i = 0; i < value.length(); i++) if (Character.isISOControl(value.charAt(i))) return true;
+        return false;
     }
 
     private static JSONObject baseResponse(String requestId) throws Exception {
@@ -470,6 +869,13 @@ final class BridgeOps {
         return out;
     }
 
+    private static com.localob.messaging.backend.db.Chat findChatEntity(String guid) {
+        try (Query<com.localob.messaging.backend.db.Chat> query = Database.INSTANCE.getChats().query()
+                .equal(Chat_.guid, guid, QueryBuilder.StringOrder.CASE_SENSITIVE).build()) {
+            return query.findUnique();
+        } catch (Throwable ignored) { return null; }
+    }
+
     static void putChatActivity(JSONObject out, Message last, Date fallbackDate) throws Exception {
         long timestamp = fallbackDate == null ? 0L : fallbackDate.getTime();
         String lastPreview = "";
@@ -514,17 +920,25 @@ final class BridgeOps {
             try (Query<com.localob.messaging.backend.db.Message> query = Database.INSTANCE.getMessages()
                     .query()
                     .equal(Message_.chatId, entity.getId())
+                    .isNull(Message_.associatedMessageType)
                     .orderDesc(Message_.dateCreated)
                     .build()) {
                 found = query.find(0, limit);
             }
+            List<String> targetGuids = new ArrayList<>();
+            for (com.localob.messaging.backend.db.Message message : found)
+                if (!blank(message.getGuid())) targetGuids.add(message.getGuid());
+            List<com.localob.messaging.backend.db.Message> reactions = reactionRows(entity, targetGuids);
+            java.util.Map<String, List<AssociatedMessage>> reactionsByTarget = groupReactionRows(reactions);
+            java.util.Map<String, Integer> replyCounts = replyCounts(entity);
             List<JSONObject> serialized = new ArrayList<>();
             int chars = 0;
             for (com.localob.messaging.backend.db.Message message : found) {
                 if (message.getDateDeleted() != null) continue;
-                if (message.getAssociatedMessageType() != null) continue;
-                JSONObject json = messageJson(message, names);
+                JSONObject json = messageJson(message, names,
+                        summarizeReactions(message.getGuid(), reactionsByTarget.get(message.getGuid())), entity);
                 if (json == null) continue;
+                json.put("replyCount", replyCounts.getOrDefault(message.getGuid(), 0));
                 chars += json.toString().length() + 1;
                 if (chars > MAX_COLLECTION_CHARS) break;
                 serialized.add(json);
@@ -560,10 +974,19 @@ final class BridgeOps {
     }
 
     static JSONObject messageJson(Message message) throws Exception {
-        return messageJson(message, null);
+        return messageJson(message, null, new JSONArray(), null);
     }
 
     private static JSONObject messageJson(Message message, ChatNames names) throws Exception {
+        return messageJson(message, names, new JSONArray(), null);
+    }
+
+    private static JSONObject messageJson(Message message, ChatNames names, JSONArray reactions) throws Exception {
+        return messageJson(message, names, reactions, null);
+    }
+
+    private static JSONObject messageJson(Message message, ChatNames names, JSONArray reactions,
+                                          com.localob.messaging.backend.db.Chat chatEntity) throws Exception {
         if (message == null || blank(message.getGuid()) || message.getGuid().length() > 512) return null;
         String text = messageText(message);
         boolean attachment = false;
@@ -587,6 +1010,12 @@ final class BridgeOps {
         out.put("text", bounded(text, MAX_TEXT_LENGTH));
         out.put("timestamp", timestamp);
         out.put("fromMe", fromMe);
+        out.put("canReact", canReact(message, chatEntity));
+        out.put("canReply", canReact(message, chatEntity));
+        out.put("reactions", reactions == null ? new JSONArray() : reactions);
+        out.put("replyCount", 0);
+        JSONObject replyTo = replyToJson(message, chatEntity, names);
+        if (replyTo != null) out.put("replyTo", replyTo);
         if (sender != null) out.put("sender", bounded(names == null ? sender : names.sender(sender), 254));
         if (attachment) out.put("attachment", true);
         if (fromMe) {
@@ -613,6 +1042,110 @@ final class BridgeOps {
             CompanionMediaProvider.putMedia(out, (com.localob.messaging.backend.db.Message) message);
         }
         return out;
+    }
+
+    private static boolean canReact(Message message) {
+        if (!(message instanceof com.localob.messaging.backend.db.Message)) return false;
+        try {
+            com.localob.messaging.backend.db.Message entity = (com.localob.messaging.backend.db.Message) message;
+            return isReactableTarget(entity, entity.getChatGuid());
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static boolean canReact(Message message,
+                                    com.localob.messaging.backend.db.Chat chatEntity) {
+        if (chatEntity == null) return canReact(message);
+        if (!supportsReactions(chatEntity) || message == null || blank(message.getGuid())) return false;
+        if (message instanceof com.localob.messaging.backend.db.Message)
+            return isReactableTarget((com.localob.messaging.backend.db.Message) message, chatEntity.getGuid());
+        if (message instanceof com.localob.messaging.backend.domain.AssociatedMessage &&
+                ((com.localob.messaging.backend.domain.AssociatedMessage) message).getTargetGuid() != null) return false;
+        try {
+            return chatEntity.getGuid().equals(message.getChatGuid()) && message.getDateDeletedFlow().getValue() == null;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static JSONObject replyToJson(Message message,
+                                          com.localob.messaging.backend.db.Chat chatEntity,
+                                          ChatNames names) throws Exception {
+        String rootGuid;
+        Integer partIndex;
+        try {
+            rootGuid = message.getThreadOriginatorGuid();
+            partIndex = message.getThreadOriginatorPartIndex();
+        } catch (Throwable ignored) {
+            return null;
+        }
+        if (blank(rootGuid)) return null;
+        MessageRef reference = new MessageRef(rootGuid, partIndex == null ? 0 : partIndex);
+        try { return replyReferenceJson(chatEntity, reference, names); }
+        catch (Throwable error) {
+            Log.d(TAG, "Reply preview unavailable", error);
+            return replyReferenceJson(reference, null, names);
+        }
+    }
+
+    private static JSONObject replyReferenceJson(com.localob.messaging.backend.db.Chat chatEntity,
+                                                 MessageRef reference, ChatNames names) throws Exception {
+        String messageId = reference.getMessageId();
+        if (chatEntity == null || blank(messageId)) return replyReferenceJson(reference, null, names);
+        try {
+            com.localob.messaging.backend.db.Message original;
+            try (Query<com.localob.messaging.backend.db.Message> query = Database.INSTANCE.getMessages()
+                    .query().equal(Message_.chatId, chatEntity.getId())
+                    .equal(Message_.guid, messageId, QueryBuilder.StringOrder.CASE_SENSITIVE).build()) {
+                original = query.findUnique();
+            }
+            return replyReferenceJson(reference, original, names);
+        } catch (Throwable error) {
+            Log.d(TAG, "Reply source lookup unavailable", error);
+            return replyReferenceJson(reference, null, names);
+        }
+    }
+
+    static JSONObject replyReferenceJson(MessageRef reference, Message original) throws Exception {
+        return replyReferenceJson(reference, original, null);
+    }
+
+    private static JSONObject replyReferenceJson(MessageRef reference, Message original, ChatNames names) throws Exception {
+        String messageId = bounded(reference.getMessageId(), 512);
+        int partIndex = reference.getPartIndex() == null ? 0 : Math.max(0, reference.getPartIndex());
+        JSONObject out = new JSONObject().put("messageId", messageId).put("partIndex", partIndex)
+                .put("text", "Original message unavailable").put("fromMe", false);
+        if (original == null || blank(messageId) || !messageId.equals(original.getGuid())) return out;
+        if (original instanceof com.localob.messaging.backend.db.Message) {
+            com.localob.messaging.backend.db.Message entity = (com.localob.messaging.backend.db.Message) original;
+            if (entity.getDateDeleted() != null || entity.getAssociatedMessageType() != null) return out;
+        } else if (original instanceof com.localob.messaging.backend.domain.AssociatedMessage &&
+                ((com.localob.messaging.backend.domain.AssociatedMessage) original).getTargetGuid() != null) {
+            return out;
+        } else {
+            try { if (original.getDateDeletedFlow().getValue() != null) return out; }
+            catch (Throwable ignored) { return out; }
+        }
+        String text = preview(original);
+        if (!blank(text)) out.put("text", bounded(text, MAX_TEXT_LENGTH));
+        out.put("fromMe", Boolean.TRUE.equals(original.isFromMe()));
+        String sender = original.getSender();
+        if (!blank(sender)) out.put("sender", bounded(names == null ? sender : names.sender(sender), 254));
+        return out;
+    }
+
+    private static java.util.Map<String, Integer> replyCounts(com.localob.messaging.backend.db.Chat chat) {
+        java.util.Map<String, Integer> counts = new java.util.HashMap<>();
+        try (Query<com.localob.messaging.backend.db.Message> query = Database.INSTANCE.getMessages().query()
+                .equal(Message_.chatId, chat.getId()).notNull(Message_.threadOriginatorGuid)
+                .isNull(Message_.associatedMessageType).isNull(Message_.dateDeleted).build()) {
+            for (com.localob.messaging.backend.db.Message reply : query.find()) {
+                String root = reply.getThreadOriginatorGuid();
+                if (!blank(root)) counts.put(root, counts.getOrDefault(root, 0) + 1);
+            }
+        }
+        return counts;
     }
 
     /** Downloads one attachment on demand for the trusted watch companion. */

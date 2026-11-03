@@ -58,6 +58,10 @@ final class SendJournal {
     private static String fingerprint(JSONObject request) throws Exception {
         String text = request.optString("threadId", "") + "\u0000" + request.optString("address", "")
                 + "\u0000" + request.optString("text", "");
+        // Preserve fingerprints for already-journaled ordinary sends.
+        if (request.has("replyToMessageId") && !request.isNull("replyToMessageId")) {
+            text += "\u0000" + request.optString("replyToMessageId") + "\u0000" + request.optInt("replyToPartIndex", 0);
+        }
         byte[] digest = MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8));
         StringBuilder out = new StringBuilder();
         for (byte value : digest) out.append(String.format(java.util.Locale.ROOT, "%02x", value & 0xff));

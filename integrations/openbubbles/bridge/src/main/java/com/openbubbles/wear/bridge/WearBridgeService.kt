@@ -73,12 +73,35 @@ class WearBridgeService : WearableListenerService() {
                 Protocol.PATH_SEND -> {
                     val request = Wire.decodeBytes<SendRequest>(data) ?: return
                     sendText(node, request.requestId, request.threadId, request.text, request.address,
-                        Protocol.ACTION_SEND, Protocol.PATH_ACTION_RESULT)
+                        Protocol.ACTION_SEND, Protocol.PATH_ACTION_RESULT,
+                        request.replyToMessageId, request.replyToPartIndex)
                 }
                 Protocol.PATH_REPLY -> {
                     val request = Wire.decodeBytes<ReplyRequest>(data) ?: return
                     sendText(node, request.requestId, request.threadId, request.text, null,
                         Protocol.ACTION_REPLY, Protocol.PATH_REPLY_RESULT)
+                }
+                Protocol.PATH_REACTION -> {
+                    val request = Wire.decodeBytes<ReactionRequest>(data) ?: return
+                    val claim = ActionDedupe.claim(applicationContext, request.requestId,
+                        Protocol.ACTION_REACTION, request.threadId)
+                    if (!claim.started) {
+                        claim.result?.let { action(node, it) }
+                        return
+                    }
+                    val finished = AtomicBoolean(false)
+                    fun complete(result: ActionResult) {
+                        if (!finished.compareAndSet(false, true)) return
+                        ActionDedupe.put(applicationContext, result)
+                        ActionDedupe.end(request.requestId)
+                        action(node, result)
+                    }
+                    try {
+                        BridgeCoordinator.react(request, ::complete)
+                    } catch (t: Throwable) {
+                        complete(ActionResult(requestId = request.requestId, action = Protocol.ACTION_REACTION,
+                            ok = false, threadId = request.threadId, error = t.message ?: "Could not send the reaction."))
+                    }
                 }
                 Protocol.PATH_MARK_READ -> {
                     val request = Wire.decodeBytes<MarkReadRequest>(data) ?: return
@@ -128,7 +151,8 @@ class WearBridgeService : WearableListenerService() {
         }
     }
 
-    private fun sendText(node: String, id: String, thread: String, text: String, address: String?, action: String, path: String) {
+    private fun sendText(node: String, id: String, thread: String, text: String, address: String?, action: String,
+                         path: String, replyToMessageId: String? = null, replyToPartIndex: Int = 0) {
         val claim = ActionDedupe.claim(applicationContext, id, action, thread)
         if (!claim.started) {
             claim.result?.let { send(node, path, Wire.encodeBytes(it)) }
@@ -142,7 +166,7 @@ class WearBridgeService : WearableListenerService() {
             send(node, path, Wire.encodeBytes(result))
         }
         try {
-            BridgeCoordinator.send(id, thread, text, address) { result ->
+            BridgeCoordinator.send(id, thread, text, address, replyToMessageId, replyToPartIndex) { result ->
                 complete(ActionResult(requestId = id, action = action, ok = result.error == null,
                     threadId = result.threadId ?: thread, error = result.error,
                     retryable = result.retryable, message = result.message))

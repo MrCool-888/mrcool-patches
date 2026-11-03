@@ -143,6 +143,8 @@ internal val REQUIRED_BACKEND_METHODS = mapOf(
     "Lcom/localob/messaging/backend/domain/Chat;" to listOf(
         "send(Lcom/localob/messaging/backend/domain/MessageContent;Lkotlinx/datetime/Instant;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
         "markRead(ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+        "messageById(Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+        "isIMessage()Z",
         "getGuid()Ljava/lang/String;",
         "isGroup()Z",
         "getHandlesFlow()Lkotlinx/coroutines/flow/StateFlow;",
@@ -153,6 +155,7 @@ internal val REQUIRED_BACKEND_METHODS = mapOf(
     ),
     "Lcom/localob/messaging/backend/db/Chat;" to listOf(
         "getGuid()Ljava/lang/String;",
+        "isIMessage()Z",
         "getHandles()Lio/objectbox/relation/ToMany;",
         "getId()J", "getDateDeleted()Ljava/util/Date;", "isRoutingStub()Z", "isGroup()Z",
         "getDisplayName()Ljava/lang/String;", "getTitle()Ljava/lang/String;",
@@ -164,6 +167,9 @@ internal val REQUIRED_BACKEND_METHODS = mapOf(
         "getTimestamp()Lkotlinx/datetime/Instant;",
         "getContentFlow()Lkotlinx/coroutines/flow/StateFlow;",
         "getDeliveryStateFlow()Lkotlinx/coroutines/flow/StateFlow;",
+        "react(Lcom/localob/messaging/backend/domain/ReactionKind;IZLkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+        "getThreadOriginatorGuid()Ljava/lang/String;",
+        "getThreadOriginatorPartIndex()Ljava/lang/Integer;",
     ),
     "Lcom/localob/messaging/backend/db/Message;" to listOf(
         "getGuid()Ljava/lang/String;", "getId()J", "getText()Ljava/lang/String;",
@@ -184,6 +190,12 @@ internal val REQUIRED_BACKEND_METHODS = mapOf(
     "Lcom/localob/messaging/backend/domain/MessageContent;" to listOf(
         "<init>(Ljava/util/List;Ljava/util/List;Lcom/localob/messaging/backend/domain/BalloonContent;Lcom/localob/messaging/backend/domain/MessageRef;Lcom/localob/messaging/backend/domain/MessageEffect;Ljava/lang/String;Z)V",
         "getRuns()Ljava/util/List;",
+    ),
+    "Lcom/localob/messaging/backend/domain/MessageRef;" to listOf(
+        "<init>(Ljava/lang/String;Ljava/lang/Integer;)V",
+    ),
+    "Lcom/localob/messaging/app/messaging/ReplyThreadingKt;" to listOf(
+        "resolveReplyTarget(Lcom/localob/messaging/backend/domain/Message;I)Lcom/localob/messaging/backend/domain/MessageRef;",
     ),
     "Lcom/localob/messaging/backend/domain/RunFormat\$Companion;" to listOf(
         "getPlain()Lcom/localob/messaging/backend/domain/RunFormat\$Flags;",

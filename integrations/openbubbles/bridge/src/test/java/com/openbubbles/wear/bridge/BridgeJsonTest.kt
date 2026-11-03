@@ -12,6 +12,24 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [32])
 class BridgeJsonTest {
+    @Test fun ownAndIncomingMessagesPreserveReactionsAndReplyContext() {
+        for (fromMe in listOf(false, true)) {
+            val json = JSONObject("""{"id":"reply","text":"Answer","timestamp":1,"fromMe":$fromMe,
+                "canReply":true,"canReact":true,"replyCount":3,
+                "replyTo":{"messageId":"original","text":"Question","sender":"Alex","partIndex":1},
+                "reactions":[{"type":"love","count":2,"fromMe":true,"partIndex":1},
+                {"type":"like","count":0}]}""")
+            val message = BridgeJson.message(json, "chat")!!
+            assertTrue(message.canReply && message.canReact)
+            assertEquals(3, message.replyCount)
+            assertEquals("original", message.replyTo!!.messageId)
+            assertEquals(1, message.replyTo!!.partIndex)
+            assertEquals(2, message.reactions.single().count)
+            assertTrue(message.reactions.single().fromMe)
+            assertEquals(fromMe, message.fromMe)
+        }
+    }
+
     @Test fun artworkUsesOnlyValidatedContentAddressedIds() {
         val id = "avatar-" + "a".repeat(64)
         val json = JSONObject().put("id", "group").put("avatarId", id)
