@@ -57,6 +57,11 @@ The Wear bridge patch also includes this control for compatibility with existing
 
 The Wear companion bridge sends watch notifications while the phone is locked and synchronizes dismissal of matching phone and watch notifications. To check the connection, select the Wear companion bridge in Morphe and tap **Send test notification** at the bottom of OpenBubbles Settings → Morphe patches. The test does not send a real message.
 
+The Icon Pack Studio patch unlocks Pro on **2.5 build 003** (version code 250030). It forces the
+app's paid-state check without touching stored purchase data or Play Billing, so a real
+subscription is neither required nor simulated. Apply it to the base APK from the official
+XAPK (or a merged APK) and sign the result with a consistent key.
+
 
 ## Build
 
@@ -123,5 +128,7 @@ Its `protocol` source is the same v4 wire contract as OB-wearos; synchronize bot
 GPL-3.0; see LICENSE and NOTICE. Template: MorpheApp/morphe-patches-template.
 The Smart Launcher Pro and signature compatibility patches are adapted from hoo-dles/morphe-patches
 (copyright 2026 Hoo-dles), revision `1f9d0da03804edd5a2e8642de6fc964814de9dd4`.
-The Buds3 widget fix was developed for this project. The two launcher features can be selected independently.
+The Icon Pack Studio Unlock Pro patch is adapted from RookieEnough/De-Vanced (GPL-3.0), revision
+`724aa1e62eb957b8bd9b1fd8a62101db80990bdb`, which forked ReVanced Patches.
+The Buds3 widget fix was developed for this project. The launcher features can be selected independently.
 The watch application source belongs in OB-wearos, not this patch bundle.
