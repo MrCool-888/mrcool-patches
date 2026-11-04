@@ -1,3 +1,9 @@
+## [1.3.1](https://github.com/MrCool-888/mrcool-patches/compare/v1.3.0...v1.3.1) (2026-11-04)
+
+### 🐛 Bug Fixes
+
+* support OpenBubbles build 20002293 ([2499479](https://github.com/MrCool-888/mrcool-patches/commit/2499479cb39d4b88e86e87831e85fe82c6b77f52))
+
 ## [1.3.0](https://github.com/MrCool-888/mrcool-patches/compare/v1.2.0...v1.3.0) (2026-11-03)
 
 ### ✨ New Features
