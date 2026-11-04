@@ -38,8 +38,8 @@ internal fun addBridgeToManifest(document: Document) {
     val applications = manifest.getElementsByTagName("application")
     if (applications.length != 1) throw PatchException("Expected one application in the manifest")
     val application = applications.item(0) as Element
-    if (application.getAttributeNS(ANDROID_NS, "name") != "com.localob.messaging.app.LocalObApplication")
-        throw PatchException("Expected the native LocalObApplication")
+    if (application.getAttributeNS(ANDROID_NS, "name") != "com.localob.messaging.shell.ShellApplication")
+        throw PatchException("Expected the native ShellApplication")
     val components = application.childNodes
     for (index in 0 until components.length) {
         val element = components.item(index) as? Element ?: continue

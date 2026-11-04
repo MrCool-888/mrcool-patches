@@ -4,7 +4,7 @@ Morphe patches based on [Morphe's patches template](https://github.com/MorpheApp
 
 ## Downloads
 
-The [latest stable release](https://github.com/MrCool-888/mrcool-patches/releases/latest) includes the Morphe patch bundle, a patched OpenBubbles 2.0.0 universal phone APK, a patched Smart Launcher 6.6 build 024 ARM64 APK, the matching watch APK, and SHA-256 checksums. The watch app is also available from [OpenBubbles Wear releases](https://github.com/MrCool-888/OB-wearos/releases/latest).
+Get the Morphe patch bundle from the [latest stable release](https://github.com/MrCool-888/mrcool-patches/releases/latest). Release notes identify the app builds supported by each bundle and any supplied patched APKs. The watch app is also available from [OpenBubbles Wear releases](https://github.com/MrCool-888/OB-wearos/releases/latest).
 
 Add `https://github.com/MrCool-888/mrcool-patches` as a patch source in Morphe Manager, then select the patches you want for your app.
 
@@ -72,6 +72,12 @@ Settings → Morphe patches → Hide ready-to-receive notification to open Andro
 channel settings, then turn that channel off or on. This does not turn off incoming message notifications.
 The Wear bridge patch also includes this control for compatibility with existing patched installations.
 
+### OpenBubbles compatibility
+
+The current OpenBubbles patches require the native ARM64 build **2.0.0, version code 20002293**. The version name alone is insufficient: build 20002289 is an earlier, unsupported target for the current source. Older patch releases retain their original build requirements.
+
+The supplied single phone APK updates our existing patched universal installation in place using the same signing key. Do not uninstall or clear app data. A stock Play Store installation has a different signature and cannot receive this APK as an in-place update. See [build 2293 validation](docs/VALIDATION-OPENBUBBLES-2293.md).
+
 The Wear companion bridge sends watch notifications while the phone is locked and synchronizes dismissal of matching phone and watch notifications. To check the connection, select the Wear companion bridge in Morphe and tap **Send test notification** at the bottom of OpenBubbles Settings → Morphe patches. The test does not send a real message.
 
 The Icon Pack Studio patch unlocks Pro on **2.5 build 003** (version code 250030). It forces the
@@ -110,9 +116,9 @@ excludes stock app classes. A source digest and artifact checksum reject stale o
 The original APK, derived host class fixture, signing material, and device data are not stored here.
 Changing the bridge requires a local rebuild with JDK 17 and the compile-only stock-derived fixture at
 `integrations/openbubbles/work/openbubbles-classes-v52.jar` (SHA-256
-`c0301f11fa889e0b4568ae5d5909a9c71ab92bef5197e1317771778781d51d92`).
-The fixture targets native OpenBubbles 2.0.0 / 20002289, base APK SHA-256
-`a382a9cbef6a83288f11ed8c4763b56c5fedb24ee6505cd21b6bbb545cdc6cc0`.
+`188711da1d45c04cb5fb9d15b58f8cdcb8ca60a38cca299e3e92caa66a17511a`).
+The fixture targets native OpenBubbles 2.0.0 / 20002293 ARM64, base APK SHA-256
+`340e8a7ecc6e8bfe07e3c563c4212e9dc481f1dad9e8ad5188e24066bb128253`.
 It is a developer input and must remain local. See the integration README for extraction and checks.
 
 ```sh

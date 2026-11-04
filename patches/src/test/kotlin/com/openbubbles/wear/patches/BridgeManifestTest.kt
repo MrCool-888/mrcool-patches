@@ -14,9 +14,9 @@ class BridgeManifestTest {
     }.newDocumentBuilder().parse(
         """
         <manifest xmlns:android="$ANDROID_NS" package="com.openbubbles.messaging"
-            android:versionName="2.0.0" android:versionCode="20002289">
+            android:versionName="2.0.0" android:versionCode="20002293">
             $queries
-            <application android:name="com.localob.messaging.app.LocalObApplication">
+            <application android:name="com.localob.messaging.shell.ShellApplication">
                 <receiver android:name="private.Receiver" android:exported="false"/>
                 <service android:name="private.Service" android:exported="false"/>
             </application>
@@ -72,6 +72,18 @@ class BridgeManifestTest {
         assertFailsWith<PatchException> { addSettingsToManifest(document) }
     }
 
+    @Test fun `keeps the shell application and rejects an unexpected startup class`() {
+        val document = manifest()
+        addBridgeToManifest(document)
+        val application = document.getElementsByTagName("application").item(0) as org.w3c.dom.Element
+        assertEquals("com.localob.messaging.shell.ShellApplication", application.getAttributeNS(ANDROID_NS, "name"))
+        val wrong = manifest()
+        (wrong.getElementsByTagName("application").item(0) as org.w3c.dom.Element)
+            .setAttributeNS(ANDROID_NS, "android:name", "com.localob.messaging.app.LocalObApplication")
+        assertFailsWith<PatchException> { addBridgeToManifest(wrong) }
+        assertEquals(1, wrong.getElementsByTagName("service").length)
+    }
+
     @Test fun `rejects provider class or authority conflicts before altering the manifest`() {
         listOf(
             MEDIA_PROVIDER_NAME to "another.authority",
@@ -112,13 +124,13 @@ class BridgeManifestTest {
     }
 
     @Test fun `rejects wrong package version and version code even if compatibility is forced`() {
-        requireSupportedVersion("com.openbubbles.messaging", "2.0.0", "20002289")
+        requireSupportedVersion("com.openbubbles.messaging", "2.0.0", "20002293")
         listOf(
-            Triple("com.example.other", "2.0.0", "20002289"),
-            Triple("com.openbubbles.messaging", "2.0.1", "20002289"),
-            Triple("com.openbubbles.messaging", "2.0.0", "20002290"),
-            Triple("com.openbubbles.messaging", "2.0.0", "020002289"),
-            Triple("com.openbubbles.messaging", "2.0.0 ", "20002289"),
+            Triple("com.example.other", "2.0.0", "20002293"),
+            Triple("com.openbubbles.messaging", "2.0.1", "20002293"),
+            Triple("com.openbubbles.messaging", "2.0.0", "20002289"),
+            Triple("com.openbubbles.messaging", "2.0.0", "020002293"),
+            Triple("com.openbubbles.messaging", "2.0.0 ", "20002293"),
         ).forEach { (name, version, code) ->
             assertFailsWith<PatchException> { requireSupportedVersion(name, version, code) }
         }
