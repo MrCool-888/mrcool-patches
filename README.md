@@ -36,7 +36,7 @@ Add `https://github.com/MrCool-888/mrcool-patches` as a patch source in Morphe M
 
 **🎯 Supported versions:**
 
-| 2.0.0 |
+| 2.0.0 build 20002293 |
 | :---: |
 
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
