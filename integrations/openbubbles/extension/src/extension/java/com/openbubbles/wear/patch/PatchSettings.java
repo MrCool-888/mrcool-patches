@@ -10,7 +10,7 @@ import androidx.compose.runtime.Composer;
 import androidx.compose.ui.platform.AndroidCompositionLocals_androidKt;
 import com.openbubbles.wear.bridge.EmbeddedRuntime;
 import com.localob.messaging.app.settings.AccountStatusSectionKt;
-import com.localob.messaging.app.settings.SettingsScreenKt;
+import com.localob.messaging.app.settings.SettingRowsKt;
 import kotlin.Unit;
 
 /** Runtime settings belong to OpenBubbles, which enforces them on every request. */
@@ -63,7 +63,7 @@ public final class PatchSettings {
         AccountStatusSectionKt.AccountStatusSection(composer, flags);
         try {
             Context context = (Context) composer.consume(AndroidCompositionLocals_androidKt.getLocalContext());
-            SettingsScreenKt.SettingLink("Morphe patches", "Configure installed patches", null, () -> {
+            SettingRowsKt.SettingLink("Morphe patches", "Configure installed patches", null, () -> {
                 context.startActivity(new Intent(context, PatchSettingsActivity.class));
                 return Unit.INSTANCE;
             }, composer, 0, 4);

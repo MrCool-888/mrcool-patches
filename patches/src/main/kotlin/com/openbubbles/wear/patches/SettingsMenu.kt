@@ -14,7 +14,7 @@ import com.android.tools.smali.dexlib2.iface.instruction.formats.Instruction3rc
 import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 import com.android.tools.smali.dexlib2.immutable.reference.ImmutableMethodReference
 
-internal const val SETTINGS_SCREEN = "Lcom/localob/messaging/app/settings/SettingsScreenKt;"
+internal const val SETTINGS_SCREEN = "Lcom/localob/messaging/app/settings/SettingsScreen_androidKt;"
 internal const val ACCOUNT_SECTION = "Lcom/localob/messaging/app/settings/AccountStatusSectionKt;"
 private val settingsHook = ImmutableMethodReference("Lcom/openbubbles/wear/patch/PatchSettings;",
     "accountStatusAndPatches", listOf("Landroidx/compose/runtime/Composer;", "I"), "V")

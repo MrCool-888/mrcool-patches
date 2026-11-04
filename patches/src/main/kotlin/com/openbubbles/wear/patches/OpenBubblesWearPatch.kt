@@ -13,6 +13,12 @@ private const val MEDIA_PROVIDER_CLASS = "Lcom/openbubbles/wear/patch/CompanionM
 private val verifyBackendPatch = bytecodePatch {
     execute {
         requireSupportedVersion()
+        val shell = classDefByOrNull("Lcom/localob/messaging/shell/ShellApplication;")
+            ?: throw PatchException("Native ShellApplication is missing")
+        if (shell.superclass != "Lcom/localob/messaging/app/LocalObApplication;" ||
+            shell.methods.any { it.name == "onCreate" }) {
+            throw PatchException("ShellApplication must inherit the native startup hook")
+        }
         if (listOf(SERVICE_CLASS, MEDIA_PROVIDER_CLASS, "Lcom/openbubbles/wear/patch/EmbeddedHooks;",
                 "Lcom/openbubbles/wear/patch/BridgeOps;").any { classDefByOrNull(it) != null }) {
             throw PatchException("The bridge is already present")
@@ -57,7 +63,7 @@ val openBubblesWearBridgePatch = bytecodePatch(
         Compatibility(
             packageName = "com.openbubbles.messaging",
             name = "OpenBubbles",
-            targets = listOf(AppTarget(version = "2.0.0", versionCodes = mapOf(SupportedAbi.ARM64_V8A to 20002289))),
+            targets = listOf(AppTarget(version = "2.0.0", versionCodes = mapOf(SupportedAbi.ARM64_V8A to 20002293))),
         ),
     )
     // Check the original backend before extension merging can mask missing classes.
@@ -96,7 +102,7 @@ val readyNotificationSettingsPatch = bytecodePatch(
         Compatibility(
             packageName = "com.openbubbles.messaging",
             name = "OpenBubbles",
-            targets = listOf(AppTarget(version = "2.0.0", versionCodes = mapOf(SupportedAbi.ARM64_V8A to 20002289))),
+            targets = listOf(AppTarget(version = "2.0.0", versionCodes = mapOf(SupportedAbi.ARM64_V8A to 20002293))),
         ),
     )
     dependsOn(sharedSettingsPatch)
@@ -107,8 +113,8 @@ private fun app.morphe.patcher.patch.BytecodePatchContext.requireSupportedVersio
 }
 
 internal fun requireSupportedVersion(packageName: String, versionName: String, versionCode: String) {
-    if (packageName != "com.openbubbles.messaging" || versionName != "2.0.0" || versionCode != "20002289") {
-        throw PatchException("Unsupported app: $packageName $versionName ($versionCode); expected native OpenBubbles 2.0.0 (20002289)")
+    if (packageName != "com.openbubbles.messaging" || versionName != "2.0.0" || versionCode != "20002293") {
+        throw PatchException("Unsupported app: $packageName $versionName ($versionCode); expected native OpenBubbles 2.0.0 (20002293)")
     }
 }
 
