@@ -72,6 +72,11 @@ Settings → Morphe patches → Hide ready-to-receive notification to open Andro
 channel settings, then turn that channel off or on. This does not turn off incoming message notifications.
 The Wear bridge patch also includes this control for compatibility with existing patched installations.
 
+Select **Classic reply menu** in Morphe to add two switches under **OpenBubbles → Settings → Morphe patches**.
+**Classic reply menu** keeps replies in the main chat and opens the keyboard. Android Back cancels the reply and keeps the draft.
+**Reverse swipe-to-reply** makes incoming messages swipe left and outgoing messages swipe right, with either reply view.
+Both switches default to on. Tap **Restart OpenBubbles** after changing either switch.
+
 ### OpenBubbles compatibility
 
 The current OpenBubbles patches require the native ARM64 build **2.0.0, version code 20002293**. The version name alone is insufficient: build 20002289 is an earlier, unsupported target for the current source. Older patch releases retain their original build requirements.
