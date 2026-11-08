@@ -9,7 +9,7 @@ Get the Morphe patch bundle from the [latest stable release](https://github.com/
 Add `https://github.com/MrCool-888/mrcool-patches` as a patch source in Morphe Manager, then select the patches you want for your app.
 
 <!-- PATCHES_START -->
-> **[v1.3.2-dev.2](https://github.com/MrCool-888/mrcool-patches/releases/tag/v1.3.2-dev.2)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;6 patches total
+> **[v1.3.2](https://github.com/MrCool-888/mrcool-patches/releases/tag/v1.3.2)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;6 patches total
 <details open>
 <summary>📦 OpenBubbles&nbsp;&nbsp;•&nbsp;&nbsp;3 patches</summary>
 <br>
@@ -18,7 +18,7 @@ Add `https://github.com/MrCool-888/mrcool-patches` as a patch source in Morphe M
 
 **🎯 Supported versions:**
 
-| 2.0.0 build 20002293 |
+| 2.0.0 |
 | :---: |
 
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
