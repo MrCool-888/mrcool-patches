@@ -9,7 +9,7 @@ Get the Morphe patch bundle from the [latest stable release](https://github.com/
 Add `https://github.com/MrCool-888/mrcool-patches` as a patch source in Morphe Manager, then select the patches you want for your app.
 
 <!-- PATCHES_START -->
-> **[v1.3.1](https://github.com/MrCool-888/mrcool-patches/releases/tag/v1.3.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;5 patches total
+> **[v1.3.2-dev.1](https://github.com/MrCool-888/mrcool-patches/releases/tag/v1.3.2-dev.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;5 patches total
 <details open>
 <summary>📦 Smart Launcher&nbsp;&nbsp;•&nbsp;&nbsp;2 patches</summary>
 <br>
@@ -24,7 +24,7 @@ Add `https://github.com/MrCool-888/mrcool-patches` as a patch source in Morphe M
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
 | [Enable Pro](#enable-pro) | Enables app features locked behind the subscription paywall. |  |
-| [Fix Galaxy Buds3 Pro widget](#fix-galaxy-buds3-pro-widget) | Fixes widget configuration returning cancelled on Samsung One UI 8.5 and later. |  |
+| [Fix Galaxy Buds3 Pro widget](#fix-galaxy-buds3-pro-widget) | Fixes widget configuration on Samsung One UI 8.5 and keeps the widget layout in sync with its size. |  |
 
 </details>
 
