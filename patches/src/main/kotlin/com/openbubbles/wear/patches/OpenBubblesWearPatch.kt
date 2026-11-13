@@ -177,8 +177,14 @@ internal val REQUIRED_BACKEND_METHODS = mapOf(
         "getContentFlow()Lkotlinx/coroutines/flow/StateFlow;",
         "getDeliveryStateFlow()Lkotlinx/coroutines/flow/StateFlow;",
         "react(Lcom/localob/messaging/backend/domain/ReactionKind;IZLkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+        "unsend(ILkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+        "canUnsend(Lkotlinx/datetime/Instant;)Z",
+        "getRetractedPartsFlow()Lkotlinx/coroutines/flow/StateFlow;",
         "getThreadOriginatorGuid()Ljava/lang/String;",
         "getThreadOriginatorPartIndex()Ljava/lang/Integer;",
+    ),
+    "Lcom/localob/messaging/app/messaging/MessagePartsKt;" to listOf(
+        "groupContentRuns(Ljava/util/List;)Ljava/util/List;",
     ),
     "Lcom/localob/messaging/backend/db/Message;" to listOf(
         "getGuid()Ljava/lang/String;", "getId()J", "getText()Ljava/lang/String;",

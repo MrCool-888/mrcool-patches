@@ -22,6 +22,8 @@ import com.localob.messaging.backend.domain.DeliveryState;
 import com.localob.messaging.backend.domain.Message;
 import com.localob.messaging.backend.domain.MessageContent;
 import com.localob.messaging.backend.domain.MessageRef;
+import com.localob.messaging.backend.domain.OfferedProfile;
+import com.localob.messaging.app.messaging.MessagePartsKt;
 import com.localob.messaging.backend.domain.ReactionKind;
 import com.localob.messaging.backend.domain.RunFormat;
 
@@ -406,6 +408,74 @@ final class BridgeOps {
             out.put("historyUnavailable", true);
         }
         return out;
+    }
+
+    static JSONObject unsend(JSONObject request) throws Exception {
+        return unsend(backend(), request);
+    }
+
+    static JSONObject unsend(BackendService backend, JSONObject request) throws Exception {
+        JSONObject out = baseResponse(request.optString("requestId", null));
+        if (backend == null) return notReady(out);
+        Chat chat;
+        Message target;
+        try {
+            String messageId = request.optString("messageId", null);
+            if (blank(messageId) || messageId.length() > 512 || hasControl(messageId))
+                throw new IllegalArgumentException("Invalid message target.");
+            chat = resolve(backend, request.optString("threadId", null), null, false);
+            if (chat == null || !chat.isIMessage())
+                throw new IllegalArgumentException("Unsend is unavailable for this conversation.");
+            target = (Message) Await.await(c -> chat.messageById(messageId, c), OP_TIMEOUT_MS);
+            if (!isMessageTarget(target, chat.getGuid()))
+                throw new IllegalArgumentException("Message not found in this conversation.");
+            unsendMessage(target);
+        } catch (Throwable t) {
+            return failure(out, t);
+        }
+        // The mutation succeeded; optional history must not turn it into a retry.
+        out.put("ok", true).put("threadId", chat.getGuid());
+        try {
+            out.put("message", new JSONObject().put("id", target.getGuid()).put("text", "Message unsent")
+                    .put("timestamp", target.getTimestamp().toEpochMilliseconds()).put("fromMe", true).put("unsent", true));
+        } catch (Throwable t) { out.put("historyUnavailable", true); }
+        try { out.put("thread", threadJson(chat, DEFAULT_MESSAGE_LIMIT)); }
+        catch (Throwable t) { out.put("historyUnavailable", true); }
+        return out;
+    }
+
+    static boolean canUnsend(Message message, long now) {
+        try {
+            return message != null && Boolean.TRUE.equals(message.isFromMe()) &&
+                    now >= message.getTimestamp().toEpochMilliseconds() &&
+                    message.getDateDeletedFlow().getValue() == null && !fullyUnsent(message) &&
+                    message.canUnsend(kotlinx.datetime.Instant.Companion.fromEpochMilliseconds(now));
+        } catch (Throwable ignored) { return false; }
+    }
+
+    static void unsendMessage(Message message) throws Exception {
+        if (!canUnsend(message, System.currentTimeMillis()))
+            throw new IllegalArgumentException("Only your own messages sent within two minutes can be unsent.");
+        List<List<ContentRun>> parts = MessagePartsKt.groupContentRuns(message.getContentFlow().getValue().getRuns());
+        if (parts.isEmpty() || parts.size() > 1024)
+            throw new IllegalArgumentException("This message cannot be unsent from the watch.");
+        java.util.Set<Integer> retracted = message.getRetractedPartsFlow().getValue();
+        for (int i = 0; i < parts.size(); i++) {
+            if (retracted != null && retracted.contains(i)) continue;
+            final int part = i;
+            Await.await(c -> message.unsend(part, c), OP_TIMEOUT_MS);
+        }
+    }
+
+    static boolean fullyUnsent(Message message) {
+        try {
+            java.util.Set<Integer> retracted = message.getRetractedPartsFlow().getValue();
+            if (retracted == null || retracted.isEmpty()) return false;
+            int count = MessagePartsKt.groupContentRuns(message.getContentFlow().getValue().getRuns()).size();
+            if (count == 0) return true;
+            for (int i = 0; i < count; i++) if (!retracted.contains(i)) return false;
+            return true;
+        } catch (Throwable ignored) { return false; }
     }
 
     static JSONObject reactionEvents(JSONObject request) throws Exception {
@@ -853,6 +923,7 @@ final class BridgeOps {
         try { putAvatarSource(out, chat.getCustomAvatarPath()); } catch (Throwable ignored) { }
         if (!group && address != null) out.put("address", address);
         out.put("participants", participants);
+        putGroupAvatarMembers(out, chat);
         out.put("unread", Boolean.TRUE.equals(chat.getHasUnreadMessage()));
         Date fallbackDate = null;
         try {
@@ -896,6 +967,40 @@ final class BridgeOps {
 
     private static void putAvatarSource(JSONObject out, String path) throws Exception {
         if (!blank(path)) out.put("avatarUri", android.net.Uri.fromFile(new java.io.File(path)).toString());
+    }
+
+    private static void putGroupAvatarMembers(JSONObject out, Chat chat) {
+        if (!out.optBoolean("isGroup") || out.has("avatarUri")) return;
+        try {
+            List<OfferedProfile> offers;
+            try { offers = chat.getOfferedProfilesFlow().getValue(); }
+            catch (Throwable ignored) { offers = Collections.emptyList(); }
+            JSONArray members = new JSONArray();
+            JSONArray participants = out.optJSONArray("participants");
+            if (participants == null) return;
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+            for (int i = 0; i < participants.length(); i++) {
+                String address = participants.optString(i);
+                Contact contact = null;
+                if (contacts != null) {
+                    long remaining = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+                    try { contact = remaining > 0 ? (Contact) Await.await(c -> contacts.resolve(address, c), remaining)
+                            : contacts.peek(address); } catch (Throwable ignored) { }
+                }
+                OfferedProfile offered = null;
+                if (offers != null) for (OfferedProfile candidate : offers)
+                    if (address.equalsIgnoreCase(candidate.getAddress())) { offered = candidate; break; }
+                String name = firstNonBlank(contact == null ? null : contact.getDisplayName(),
+                        offered == null ? null : offered.getDisplayName(), address);
+                String source = contact == null ? null : contact.getPhotoUri();
+                if (blank(source) && offered != null && !blank(offered.getAvatarPath()))
+                    source = android.net.Uri.fromFile(new java.io.File(offered.getAvatarPath())).toString();
+                JSONObject member = new JSONObject().put("name", bounded(name, 160));
+                if (!blank(source)) member.put("source", source);
+                members.put(member);
+            }
+            out.put("avatarMembers", members);
+        } catch (Throwable ignored) { }
     }
 
     private static JSONObject threadJson(Chat chat, int limit) throws Exception {
@@ -966,6 +1071,7 @@ final class BridgeOps {
             if (!chat.isGroup() && handles.size() == 1) out.put("address", normalizeAddress(handles.get(0)));
         }
         out.put("participants", participants);
+        putGroupAvatarMembers(out, chat);
         kotlinx.datetime.Instant activity = chat.getLastActivityFlow().getValue();
         out.put("lastTimestamp", activity == null ? 0L : activity.toEpochMilliseconds());
         Message last = chat.getLastMessageFlow().getValue();
@@ -989,6 +1095,7 @@ final class BridgeOps {
                                           com.localob.messaging.backend.db.Chat chatEntity) throws Exception {
         if (message == null || blank(message.getGuid()) || message.getGuid().length() > 512) return null;
         String text = messageText(message);
+        boolean unsent = fullyUnsent(message);
         boolean attachment = false;
         long timestamp;
         boolean fromMe;
@@ -1004,14 +1111,18 @@ final class BridgeOps {
             fromMe = Boolean.TRUE.equals(message.isFromMe());
             sender = message.getSender();
         }
+        if (unsent) { text = "Message unsent"; attachment = false; }
         if (blank(text) && !attachment) return null;
         JSONObject out = new JSONObject();
         out.put("id", message.getGuid());
         out.put("text", bounded(text, MAX_TEXT_LENGTH));
         out.put("timestamp", timestamp);
         out.put("fromMe", fromMe);
-        out.put("canReact", canReact(message, chatEntity));
-        out.put("canReply", canReact(message, chatEntity));
+        out.put("canReact", !unsent && canReact(message, chatEntity));
+        out.put("canReply", !unsent && canReact(message, chatEntity));
+        out.put("canUnsend", canReact(message, chatEntity) && canUnsend(message, System.currentTimeMillis()));
+        out.put("unsent", unsent);
+        out.put("hasRetractedParts", hasRetractedParts(message));
         out.put("reactions", reactions == null ? new JSONArray() : reactions);
         out.put("replyCount", 0);
         JSONObject replyTo = replyToJson(message, chatEntity, names);
@@ -1038,7 +1149,7 @@ final class BridgeOps {
                 Log.d(TAG, "Message delivery status unavailable", t);
             }
         }
-        if (attachment && message instanceof com.localob.messaging.backend.db.Message) {
+        if (attachment && !hasRetractedParts(message) && message instanceof com.localob.messaging.backend.db.Message) {
             CompanionMediaProvider.putMedia(out, (com.localob.messaging.backend.db.Message) message);
         }
         return out;
@@ -1172,14 +1283,20 @@ final class BridgeOps {
 
     /** Domain messages expose text through content runs; entities store it directly. */
     private static String messageText(Message message) {
-        if (message instanceof com.localob.messaging.backend.db.Message) {
+        if (fullyUnsent(message)) return "Message unsent";
+        if (message instanceof com.localob.messaging.backend.db.Message && !hasRetractedParts(message)) {
             return bounded(((com.localob.messaging.backend.db.Message) message).getText(), MAX_TEXT_LENGTH);
         }
         try {
             MessageContent content = message.getContentFlow().getValue();
             if (content == null) return null;
             StringBuilder text = new StringBuilder();
-            for (ContentRun run : content.getRuns()) {
+            List<List<ContentRun>> parts = MessagePartsKt.groupContentRuns(content.getRuns());
+            java.util.Set<Integer> retracted = Collections.emptySet();
+            try { retracted = message.getRetractedPartsFlow().getValue(); } catch (Throwable ignored) { }
+            for (int i = 0; i < parts.size(); i++) {
+                if (retracted != null && retracted.contains(i)) continue;
+                for (ContentRun run : parts.get(i)) {
                 if (run instanceof ContentRun.Text) {
                     String value = ((ContentRun.Text) run).getText();
                     if (value != null) {
@@ -1188,11 +1305,19 @@ final class BridgeOps {
                         if (value.length() >= remaining) break;
                     }
                 }
+                }
             }
             return text.toString();
         } catch (Throwable t) {
             return null;
         }
+    }
+
+    private static boolean hasRetractedParts(Message message) {
+        try {
+            java.util.Set<Integer> parts = message.getRetractedPartsFlow().getValue();
+            return parts != null && !parts.isEmpty();
+        } catch (Throwable ignored) { return false; }
     }
 
     private static String appVersion(Context context) {

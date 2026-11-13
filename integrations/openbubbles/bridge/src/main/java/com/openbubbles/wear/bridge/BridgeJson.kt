@@ -103,6 +103,9 @@ internal object BridgeJson {
             sourceUri = uri?.toString(),
             canReact = json.optBoolean("canReact"),
             canReply = json.optBoolean("canReply"),
+            canUnsend = json.optBoolean("canUnsend"),
+            unsent = json.optBoolean("unsent"),
+            hasRetractedParts = json.optBoolean("hasRetractedParts"),
             replyCount = json.optInt("replyCount", 0).coerceAtLeast(0),
             reactions = json.optJSONArray("reactions")?.let { items ->
                 (0 until items.length()).mapNotNull { index ->

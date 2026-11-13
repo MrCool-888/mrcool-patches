@@ -12,6 +12,16 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [32])
 class BridgeJsonTest {
+    @Test fun unsendCapabilityAndTombstoneSurviveNativeJson() {
+        val recent = JSONObject().put("id", "m").put("text", "Hi").put("timestamp", 1).put("fromMe", true)
+            .put("canUnsend", true)
+        assertTrue(BridgeJson.message(recent, "chat")!!.canUnsend)
+        val unsent = BridgeJson.message(recent.put("text", "Message unsent").put("unsent", true)
+            .put("canUnsend", false), "chat")!!
+        assertTrue(unsent.unsent)
+        assertEquals("Message unsent", unsent.text)
+    }
+
     @Test fun ownAndIncomingMessagesPreserveReactionsAndReplyContext() {
         for (fromMe in listOf(false, true)) {
             val json = JSONObject("""{"id":"reply","text":"Answer","timestamp":1,"fromMe":$fromMe,

@@ -390,6 +390,36 @@ object BridgeCoordinator {
         }
     }
 
+    fun unsend(request: UnsendRequest, callback: (ActionResult) -> Unit) {
+        fun complete(error: String?, message: WireMessage? = null) = callback(ActionResult(
+            requestId = request.requestId, action = Protocol.ACTION_UNSEND,
+            ok = error == null, threadId = request.threadId, error = error, message = message))
+        if (!initialized || !prefs.relayEnabled) {
+            complete("Enable the Wear bridge in OpenBubbles first.")
+            return
+        }
+        if (!Protocol.isChatGuid(request.threadId) || request.messageId.isBlank() ||
+            request.messageId.length > 512 || request.messageId.any(Char::isISOControl)) {
+            complete("Invalid unsend target.")
+            return
+        }
+        val fields = JSONObject().put("requestId", request.requestId).put("threadId", request.threadId)
+            .put("messageId", request.messageId)
+        PatchBridgeClient.request(appContext, "unsend", fields, 28_000) { reply ->
+            if (!reply.ok) {
+                complete(reply.error ?: "Could not unsend the message. Refresh before trying again.")
+                return@request
+            }
+            val message = BridgeJson.message(reply.json?.optJSONObject("message"), request.threadId)
+                ?.takeIf { it.id == request.messageId && it.unsent }
+            if (message != null) store.mergeHistory(request.threadId, listOf(message))
+            val thread = BridgeJson.thread(reply.json?.optJSONObject("thread"))
+                ?.takeIf { it.id == request.threadId }?.let(::storeBridgeThread)
+            thread?.let { publishThreadUpdate(decorate(it)) }
+            complete(null, message)
+        }
+    }
+
     private fun recordSent(threadId: String, requestId: String, text: String, replyTo: MessageReference? = null): WireMessage {
         val message = WireMessage(id = BridgeStore.OPTIMISTIC_MESSAGE_PREFIX + requestId,
             threadId = threadId, text = text, timestamp = System.currentTimeMillis(),

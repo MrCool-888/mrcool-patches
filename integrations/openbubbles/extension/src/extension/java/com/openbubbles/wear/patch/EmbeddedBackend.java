@@ -38,7 +38,7 @@ public final class EmbeddedBackend implements EmbeddedRuntime.Backend {
                         .put("enabled", false).toString();
             }
             if (op.equals("status") || op.equals("chats") || op.equals("thread") ||
-                    op.equals("send") || op.equals("markRead") || op.equals("reaction") ||
+                    op.equals("send") || op.equals("markRead") || op.equals("reaction") || op.equals("unsend") ||
                     op.equals("reactionEvents"))
                 prepareBackend(!op.equals("status"));
 
@@ -55,6 +55,7 @@ public final class EmbeddedBackend implements EmbeddedRuntime.Backend {
                             request, () -> BridgeOps.send(sendRequest));
                     break;
                 case "reaction": response = BridgeOps.react(request); break;
+                case "unsend": response = BridgeOps.unsend(request); break;
                 case "reactionEvents":
                     response = BridgeOps.reactionEvents(request)
                             .put("hidePreview", com.localob.messaging.backend.prefs.SetupPrefs.INSTANCE.getHideTextPreviews());
@@ -71,7 +72,7 @@ public final class EmbeddedBackend implements EmbeddedRuntime.Backend {
             if (chats != null) for (int i = 0; i < chats.length(); i++) attachAvatar(chats.optJSONObject(i));
             String encoded = response.toString();
             if (encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_RESPONSE_BYTES) {
-                if (op.equals("reaction") && response.optBoolean("ok")) {
+                if ((op.equals("reaction") || op.equals("unsend")) && response.optBoolean("ok")) {
                     response.remove("message");
                     response.remove("thread");
                     response.put("historyUnavailable", true);
@@ -93,10 +94,23 @@ public final class EmbeddedBackend implements EmbeddedRuntime.Backend {
         if (chat == null) return;
         String source = chat.optString("avatarUri");
         chat.remove("avatarUri");
+        org.json.JSONArray members = chat.optJSONArray("avatarMembers");
+        chat.remove("avatarMembers");
         try {
             String avatar = AvatarCache.INSTANCE.cache(context, source.isEmpty() ? null : android.net.Uri.parse(source));
             if (avatar == null && !chat.optBoolean("isGroup"))
                 avatar = AvatarCache.INSTANCE.forAddress(context, chat.optString("address", null));
+            if (avatar == null && chat.optBoolean("isGroup") && members != null) {
+                java.util.List<AvatarCache.Member> pictures = new java.util.ArrayList<>();
+                for (int i = 0; i < members.length(); i++) {
+                    JSONObject member = members.optJSONObject(i);
+                    if (member == null) continue;
+                    String uri = member.optString("source");
+                    String id = AvatarCache.INSTANCE.cache(context, uri.isEmpty() ? null : android.net.Uri.parse(uri));
+                    pictures.add(new AvatarCache.Member(member.optString("name", "?"), id));
+                }
+                avatar = AvatarCache.INSTANCE.group(context, pictures);
+            }
             if (avatar != null) chat.put("avatarId", avatar);
         } catch (Throwable error) {
             // Optional artwork must never turn an acknowledged send into a failure.
