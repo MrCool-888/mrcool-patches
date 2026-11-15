@@ -13,9 +13,10 @@ import com.android.tools.smali.dexlib2.Opcode
 
 object PurchaseItemsCtor : Fingerprint(
     accessFlags = listOf(AccessFlags.STATIC, AccessFlags.CONSTRUCTOR),
+    strings = listOf("unlockpro"),
     filters = listOf(
         string("lifetime"),
-        opcode(Opcode.INVOKE_DIRECT),
+        opcode(Opcode.INVOKE_DIRECT_RANGE),
         opcode(Opcode.SPUT_OBJECT),
         opcode(Opcode.NEW_INSTANCE)
     )
