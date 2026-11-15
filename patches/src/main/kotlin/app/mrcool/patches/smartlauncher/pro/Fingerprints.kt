@@ -37,6 +37,16 @@ object PurchasableItemGetFingerprint : Fingerprint(
     returnType = "Z"
 )
 
+object LicenseRefreshFingerprint : Fingerprint(
+    parameters = listOf(
+        "Lk19;",
+        "Ljava/util/ArrayList;",
+        "Z",
+        "Lginlemon/flower/App;"
+    ),
+    returnType = "V"
+)
+
 object GetAppFingerprint : Fingerprint(
     accessFlags = listOf(AccessFlags.PUBLIC, AccessFlags.STATIC),
     parameters = listOf(),
