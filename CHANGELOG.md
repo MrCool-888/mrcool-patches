@@ -1,3 +1,9 @@
+## [1.3.4](https://github.com/MrCool-888/mrcool-patches/compare/v1.3.3...v1.3.4) (2026-11-15)
+
+### 🐛 Bug Fixes
+
+* **SmartLauncher:** keep Pro license from being revoked by Play Billing ([#15](https://github.com/MrCool-888/mrcool-patches/issues/15)) ([590cfa2](https://github.com/MrCool-888/mrcool-patches/commit/590cfa228adbc9e433165c47485845d75391f136))
+
 ## [1.3.4-dev.1](https://github.com/MrCool-888/mrcool-patches/compare/v1.3.3...v1.3.4-dev.1) (2026-11-15)
 
 ### 🐛 Bug Fixes
