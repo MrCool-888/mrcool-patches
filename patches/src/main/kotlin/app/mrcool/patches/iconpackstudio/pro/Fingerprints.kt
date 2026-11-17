@@ -13,8 +13,8 @@ import com.android.tools.smali.dexlib2.AccessFlags
 
 /**
  * Locates the purchase-item holder by the three products it defines.
- * Icon Pack Studio 2.5 build 003 is R8-obfuscated, so the former
- * IPSPurchaseRepository class name is no longer present in the DEX.
+ * Icon Pack Studio 2.5 builds 003 and 005 are R8-obfuscated, so the former
+ * IPSPurchaseRepository class name is not present in the DEX.
  */
 internal object PurchaseItemsCtorFingerprint : Fingerprint(
     accessFlags = listOf(AccessFlags.STATIC, AccessFlags.CONSTRUCTOR),
