@@ -1,3 +1,9 @@
+## [1.4.0-dev.1](https://github.com/MrCool-888/mrcool-patches/compare/v1.3.4...v1.4.0-dev.1) (2026-11-17)
+
+### ✨ New Features
+
+* **IconPackStudio:** support 2.5 build 005 ([19d433e](https://github.com/MrCool-888/mrcool-patches/commit/19d433e12ee574cf33d16b82ab5f0134ce7663c1))
+
 ## [1.3.4](https://github.com/MrCool-888/mrcool-patches/compare/v1.3.3...v1.3.4) (2026-11-15)
 
 ### 🐛 Bug Fixes
