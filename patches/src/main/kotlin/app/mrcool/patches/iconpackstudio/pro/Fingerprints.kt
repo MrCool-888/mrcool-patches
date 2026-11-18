@@ -41,3 +41,15 @@ internal object CheckProFingerprint : Fingerprint(
 internal object CommunityHeaderFingerprint : Fingerprint(
     filters = listOf(literal(0x7f0800cd))
 )
+
+/** The pack details state, located by the prefix of its generated toString. */
+internal object PackDetailsStateFingerprint : Fingerprint(
+    filters = listOf(string("PackDetailsState(pack="))
+)
+
+/** The no-argument boolean that reports whether the open pack requires Pro. */
+internal object PackRequiresProFingerprint : Fingerprint(
+    classFingerprint = PackDetailsStateFingerprint,
+    parameters = listOf(),
+    returnType = "Z"
+)
