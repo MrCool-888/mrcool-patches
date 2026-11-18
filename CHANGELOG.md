@@ -1,3 +1,9 @@
+## [1.4.0-dev.2](https://github.com/MrCool-888/mrcool-patches/compare/v1.4.0-dev.1...v1.4.0-dev.2) (2026-11-18)
+
+### ✨ New Features
+
+* **IconPackStudio:** hide the community Get Pro upsell ([b110650](https://github.com/MrCool-888/mrcool-patches/commit/b110650dae71eab4cc8ddb82d00f16417bdaa9ec))
+
 ## [1.4.0-dev.1](https://github.com/MrCool-888/mrcool-patches/compare/v1.3.4...v1.4.0-dev.1) (2026-11-17)
 
 ### ✨ New Features
