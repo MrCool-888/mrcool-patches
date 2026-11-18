@@ -22,14 +22,22 @@ ORs the three persisted purchase flags.
 The patch prepends `const/4 v0, 0x1` / `return v0`, matching De-Vanced's behavior of
 forcing the paid state without altering the stored purchase data or Play Billing.
 
+The community header decides whether to show the `Get Pro` pill from a billing
+`StateFlow`, which still reports no purchase. The patch also makes the header composable
+(`ginlemon/iconpackstudio/features/community/b`, found by the `R.drawable.btn_get_pro`
+resource id) read that flag as true, so the upsell is hidden while every other use of the
+real billing state is left alone.
+
 ## Verification performed
 
 - `:patches:test` and `:extensions:smartlauncher:widgetTest` pass with the new target.
-- The bundle (`patches-1.3.4.mpp` built locally) loads in Morphe Desktop 1.20.0 and
-  passes the version check for `2.5 build 005` with strict fingerprint validation and
-  full DEX rebuilding. Morphe reports 1 of 18,965 classes changed.
-- DEX comparison retains all 18,965 original classes; no classes were removed. Exactly
-  one method changed: `Lginlemon/flower/ipsLicense/billing/a;->a()Z`, now returning true.
+- The bundle built from this commit loads in Morphe Desktop 1.20.0 and passes the version
+  check for `2.5 build 005` with strict fingerprint validation and full DEX rebuilding.
+  Morphe reports 2 of 18,965 classes changed.
+- DEX comparison retains all 18,965 original classes; no classes were removed. One method
+  changed: `Lginlemon/flower/ipsLicense/billing/a;->a()Z`, now returning true. One
+  instruction changed in the community header: the `hasPremiumAccess` field read now
+  yields `true`, which removes the `Get Pro` pill.
 - Every non-DEX APK entry (resources, assets, manifest) is unchanged; only the DEX files
   differ (the patched APK is re-split into four DEX files).
 
@@ -48,4 +56,5 @@ certificate. Install the base with the `en`, `mdpi` and `arm64_v8a` splits.
 - Purchases are not simulated: Play Billing remains untouched, and a real subscription
   is not expected to be affected.
 - The patched APK was installed in place on the connected Galaxy S25 with the existing
-  release key; the app launched to the home screen with no fatal or linkage errors.
+  release key; the app launched to the home screen with no fatal or linkage errors, and
+  the community screen no longer shows the `Get Pro` pill.

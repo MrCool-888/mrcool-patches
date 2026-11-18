@@ -8,6 +8,7 @@
 package app.mrcool.patches.iconpackstudio.pro
 
 import app.morphe.patcher.Fingerprint
+import app.morphe.patcher.literal
 import app.morphe.patcher.string
 import com.android.tools.smali.dexlib2.AccessFlags
 
@@ -31,4 +32,12 @@ internal object CheckProFingerprint : Fingerprint(
     accessFlags = listOf(AccessFlags.PUBLIC, AccessFlags.STATIC),
     parameters = listOf(),
     returnType = "Z"
+)
+
+/**
+ * The community header composable, located by the R.drawable.btn_get_pro
+ * resource id it loads for the "Get Pro" pill.
+ */
+internal object CommunityHeaderFingerprint : Fingerprint(
+    filters = listOf(literal(0x7f0800cd))
 )

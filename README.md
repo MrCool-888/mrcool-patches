@@ -89,8 +89,8 @@ The supplied single phone APK updates our existing patched universal installatio
 The Wear companion bridge sends watch notifications while the phone is locked and synchronizes dismissal of matching phone and watch notifications. To check the connection, select the Wear companion bridge in Morphe and tap **Send test notification** at the bottom of OpenBubbles Settings → Morphe patches. The test does not send a real message.
 
 The Icon Pack Studio patch unlocks Pro on **2.5 build 005** (version code 250050). It forces the
-app's paid-state check without touching stored purchase data or Play Billing, so a real
-subscription is neither required nor simulated. Apply it to the base APK from the official
+app's paid-state check and hides the community `Get Pro` upsell without touching stored
+purchase data or Play Billing, so a real subscription is neither required nor simulated. Apply it to the base APK from the official
 XAPK (or a merged APK) and sign the result with a consistent key. The APKPure XAPK ships
 only an `armeabi-v7a` ABI split, so 64-bit-only devices need a matching `arm64_v8a`
 split; see [build 005 validation](docs/VALIDATION-IPS-2.5.0.md).
