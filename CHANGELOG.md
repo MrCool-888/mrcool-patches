@@ -1,3 +1,9 @@
+## [1.4.0-dev.3](https://github.com/MrCool-888/mrcool-patches/compare/v1.4.0-dev.2...v1.4.0-dev.3) (2026-11-18)
+
+### ✨ New Features
+
+* **IconPackStudio:** unlock Pro community packs ([b30f4f6](https://github.com/MrCool-888/mrcool-patches/commit/b30f4f638def09dd8092943ab612cd1ca0c204b9))
+
 ## [1.4.0-dev.2](https://github.com/MrCool-888/mrcool-patches/compare/v1.4.0-dev.1...v1.4.0-dev.2) (2026-11-18)
 
 ### ✨ New Features
