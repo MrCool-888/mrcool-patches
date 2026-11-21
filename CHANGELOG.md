@@ -1,3 +1,9 @@
+## [1.4.1-dev.1](https://github.com/MrCool-888/mrcool-patches/compare/v1.4.0...v1.4.1-dev.1) (2026-11-21)
+
+### 🚀 Updated App Support
+
+* **OpenBubbles:** support build 20002296 and photo collections ([2d79ac0](https://github.com/MrCool-888/mrcool-patches/commit/2d79ac064a1349a6e85a7cdfc5051b2c5e9715d2))
+
 ## [1.4.0](https://github.com/MrCool-888/mrcool-patches/compare/v1.3.4...v1.4.0) (2026-11-18)
 
 ### ✨ New Features
