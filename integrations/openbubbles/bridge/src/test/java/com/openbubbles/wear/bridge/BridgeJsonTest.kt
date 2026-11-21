@@ -1,5 +1,6 @@
 package com.openbubbles.wear.bridge
 
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -12,6 +13,16 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [32])
 class BridgeJsonTest {
+    @Test fun unsendCapabilityAndTombstoneSurviveNativeJson() {
+        val recent = JSONObject().put("id", "m").put("text", "Hi").put("timestamp", 1).put("fromMe", true)
+            .put("canUnsend", true)
+        assertTrue(BridgeJson.message(recent, "chat")!!.canUnsend)
+        val unsent = BridgeJson.message(recent.put("text", "Message unsent").put("unsent", true)
+            .put("canUnsend", false), "chat")!!
+        assertTrue(unsent.unsent)
+        assertEquals("Message unsent", unsent.text)
+    }
+
     @Test fun ownAndIncomingMessagesPreserveReactionsAndReplyContext() {
         for (fromMe in listOf(false, true)) {
             val json = JSONObject("""{"id":"reply","text":"Answer","timestamp":1,"fromMe":$fromMe,
@@ -56,6 +67,21 @@ class BridgeJsonTest {
         for (uri in listOf("file:///data/data/private", "content://contacts/one", "$valid/extra", "$valid?path=secret")) {
             assertNull(BridgeJson.mediaUri(uri))
         }
+    }
+
+    @Test fun photoCollectionKeepsDistinctIdsInNativeOrderForTheSameMimeType() {
+        val prefix = "content://com.openbubbles.messaging.wear.media/attachment/"
+        fun item(guid: String, mime: String = "image/jpeg") =
+            JSONObject().put("mediaUri", prefix + guid).put("mediaMime", mime)
+        val json = JSONObject().put("id", "collection").put("attachment", true)
+            .put("attachments", JSONArray().put(item("second")).put(item("clip", "video/mp4"))
+                .put(item("%66irst")).put(item("first")).put(item("second")))
+        val message = BridgeJson.message(json, "chat")!!
+        assertEquals(listOf(prefix + "second", prefix + "first"), message.attachments.map { it.sourceUri })
+        assertEquals(2, message.attachmentIds.toSet().size)
+        assertEquals(message.attachmentIds.first(), message.mediaId)
+        assertEquals(message.attachmentIds, BridgeJson.message(json, "chat")!!.attachmentIds)
+        assertTrue(BridgeJson.message(json.put("hasRetractedParts", true), "chat")!!.attachmentIds.isEmpty())
     }
 
     @Test

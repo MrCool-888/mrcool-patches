@@ -6,7 +6,7 @@ import android.os.Build
 import android.os.PowerManager
 
 object BridgeInfo {
-    const val BRIDGE_VERSION = "3.1.0-dev"
+    const val BRIDGE_VERSION = "3.2.0-dev.3"
     fun isOpenBubblesPackage(name: String?): Boolean = name == "com.openbubbles.messaging"
     fun isPhoneLocked(context: Context): Boolean = runCatching {
         context.getSystemService(KeyguardManager::class.java)?.isDeviceLocked == true

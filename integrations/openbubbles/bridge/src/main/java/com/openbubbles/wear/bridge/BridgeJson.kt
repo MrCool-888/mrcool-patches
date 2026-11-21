@@ -1,6 +1,7 @@
 package com.openbubbles.wear.bridge
 
 import android.net.Uri
+import com.openbubbles.wear.protocol.MessageAttachment
 import com.openbubbles.wear.protocol.Protocol
 import com.openbubbles.wear.protocol.MessageReaction
 import com.openbubbles.wear.protocol.MessageReference
@@ -78,15 +79,23 @@ internal object BridgeJson {
     fun message(json: JSONObject?, threadId: String): WireMessage? {
         if (json == null) return null
         val text = json.optString("text").take(800)
-        val attachment = json.optBoolean("attachment")
-        if (text.isBlank() && !attachment) return null
         val timestamp = json.optLong("timestamp", 0L)
         val sender = json.optString("sender").takeIf { it.isNotBlank() }
         val id = json.optString("id").takeIf { it.isNotBlank() }
             ?: Protocol.messageId(threadId, timestamp, sender, text)
-        val mime = Protocol.normalizeMimeType(json.optString("mediaMime"))
-            ?.takeIf(Protocol::isImageMimeType)
-        val uri = mediaUri(json.optString("mediaUri"))?.takeIf { mime != null }
+        val unsent = json.optBoolean("unsent")
+        val hasRetractedParts = json.optBoolean("hasRetractedParts")
+        val media = if (unsent || hasRetractedParts) emptyList() else {
+            json.optJSONArray("attachments")?.let { items ->
+                (0 until items.length()).mapNotNull { index ->
+                    items.optJSONObject(index)?.let { photo(it, id, useAttachmentGuid = true) }
+                }.distinctBy { it.sourceUri }
+            }.orEmpty()
+        }
+        val primary = media.firstOrNull()
+            ?: if (unsent || hasRetractedParts) null else photo(json, id, useAttachmentGuid = false)
+        val attachment = !unsent && (json.optBoolean("attachment") || primary != null)
+        if (text.isBlank() && !attachment) return null
         return WireMessage(
             id = id,
             threadId = threadId,
@@ -98,11 +107,15 @@ internal object BridgeJson {
                 json.optBoolean("fromMe") && it in DELIVERY_STATUSES
             },
             attachment = attachment,
-            mediaId = if (uri != null && mime != null) Protocol.mediaId(id, mime) else null,
-            mediaMime = if (uri != null) mime else null,
-            sourceUri = uri?.toString(),
+            mediaId = primary?.id,
+            mediaMime = primary?.mimeType,
+            sourceUri = primary?.sourceUri,
+            attachments = media,
             canReact = json.optBoolean("canReact"),
             canReply = json.optBoolean("canReply"),
+            canUnsend = json.optBoolean("canUnsend"),
+            unsent = unsent,
+            hasRetractedParts = hasRetractedParts,
             replyCount = json.optInt("replyCount", 0).coerceAtLeast(0),
             reactions = json.optJSONArray("reactions")?.let { items ->
                 (0 until items.length()).mapNotNull { index ->
@@ -125,11 +138,22 @@ internal object BridgeJson {
         )
     }
 
+    private fun photo(json: JSONObject, messageId: String, useAttachmentGuid: Boolean): MessageAttachment? {
+        val mime = Protocol.normalizeMimeType(json.optString("mediaMime"))
+            ?.takeIf(Protocol::isImageMimeType) ?: return null
+        val uri = mediaUri(json.optString("mediaUri")) ?: return null
+        val identity = if (useAttachmentGuid) messageId + "\u0000" + uri.lastPathSegment else messageId
+        return MessageAttachment(Protocol.mediaId(identity, mime), mime, uri.toString())
+    }
+
+    private val ATTACHMENT_GUID = Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,199}")
+
     fun mediaUri(raw: String?): Uri? = raw?.takeIf { it.isNotBlank() }?.let(Uri::parse)?.takeIf {
         it.scheme == "content" && it.authority == "com.openbubbles.messaging.wear.media" &&
             it.query == null && it.fragment == null && it.pathSegments.size == 2 &&
             it.pathSegments.first() == "attachment" &&
-            it.pathSegments.last().matches(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,199}"))
+            ATTACHMENT_GUID.matches(it.pathSegments.last()) &&
+            it.encodedPath == "/attachment/${it.pathSegments.last()}"
     }
 
     private fun title(json: JSONObject, isGroup: Boolean, address: String?): String {

@@ -7,8 +7,6 @@ import android.graphics.ImageDecoder
 import android.media.MediaDataSource
 import android.media.MediaMetadataRetriever
 import android.net.Uri
-import com.openbubbles.wear.protocol.WireMessage
-import com.openbubbles.wear.protocol.WireThread
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,12 +28,11 @@ class HeicSequenceTest {
         }
         val cache = MediaCache(context)
         cache.clear()
-        val thread = WireThread("chat", "Group", messages = listOf(
-            WireMessage("sequence-message", "chat", "", 1, attachment = true)))
-        val result = cache.ingest(thread, mapOf("sequence-message" to MediaSource(Uri.fromFile(source), "image/heic")))
-        val id = result.messages.single().mediaId
-        assertNotNull("A sequence frame must become viewable media", id)
-        val info = cache.info(id!!)!!
+        val id = "sequence-photo"
+        val info = cache.ingest(id, MediaSource(Uri.fromFile(source), "image/heic"))
+        assertNotNull("A sequence frame must become viewable media", info)
+        assertEquals(info, cache.info(id))
+        requireNotNull(info)
         assertEquals("image/webp", info.mimeType)
         assertEquals(442, info.width)
         assertEquals(960, info.height)

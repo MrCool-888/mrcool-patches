@@ -19,11 +19,14 @@ public class EmbeddedAvatarTest {
         Method attach = EmbeddedBackend.class.getDeclaredMethod("attachAvatar", JSONObject.class);
         attach.setAccessible(true);
         JSONObject chat = new JSONObject().put("id", "1".repeat(64)).put("isGroup", true)
-                .put("title", "Group").put("avatarUri", "file:///data/private/secret");
+                .put("title", "Group").put("avatarUri", "file:///data/private/secret")
+                .put("avatarMembers", new org.json.JSONArray().put(new JSONObject()
+                        .put("name", "Test").put("source", "file:///data/private/member")));
         attach.invoke(backend, chat);
         assertEquals("Group", chat.getString("title"));
         assertEquals("1".repeat(64), chat.getString("id"));
         assertFalse(chat.has("avatarUri"));
-        assertFalse(chat.has("avatarId"));
+        assertFalse(chat.has("avatarMembers"));
+        assertFalse(chat.toString().contains("/data/private"));
     }
 }

@@ -9,8 +9,6 @@ import android.media.MediaDataSource
 import android.media.MediaMetadataRetriever
 import android.util.Log
 import com.openbubbles.wear.protocol.Protocol
-import com.openbubbles.wear.protocol.WireMessage
-import com.openbubbles.wear.protocol.WireThread
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
@@ -19,7 +17,7 @@ import java.nio.ByteBuffer
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-/** An image URI carried by a notification, before it is copied into the cache. */
+/** An image URI on the phone, before it is copied into the cache. */
 data class MediaSource(
     val uri: Uri,
     val mimeType: String?
@@ -36,10 +34,8 @@ data class MediaInfo(
 )
 
 /**
- * Copies notification image attachments into app-private storage while the
- * notification listener still holds the URI grant. Static images are
- * downscaled for the watch; GIFs and animated WebPs are preserved when they
- * fit the transfer budget, otherwise their first frame is used.
+ * Copies requested images into app-private storage. Static images are downscaled
+ * for the watch. Animations are preserved when they fit the transfer budget.
  */
 class MediaCache(context: Context) {
     private val appContext = context.applicationContext
@@ -50,25 +46,6 @@ class MediaCache(context: Context) {
 
     init {
         directory.mkdirs()
-    }
-
-    fun ingest(
-        thread: WireThread,
-        sources: Map<String, MediaSource>,
-        previous: WireThread? = null
-    ): WireThread {
-        val priorById = previous?.messages?.associateBy { it.id }.orEmpty()
-        val messages = thread.messages.map { message ->
-            val info = when (val source = sources[message.id]) {
-                null -> message.mediaId?.let(::info)
-                    ?: priorById[message.id]?.mediaId?.let(::info)
-                else -> ingestOne(message.id, source)
-                    ?: priorById[message.id]?.mediaId?.let(::info)
-            }
-            val enriched = if (info != null) message.withMedia(info) else message
-            priorById[message.id]?.let(enriched::mergeMediaFrom) ?: enriched
-        }
-        return thread.copy(messages = messages)
     }
 
     fun info(mediaId: String): MediaInfo? = synchronized(lock) {
@@ -124,55 +101,44 @@ class MediaCache(context: Context) {
         }
     }
 
-    private fun ingestOne(messageId: String, source: MediaSource): MediaInfo? {
+    fun ingest(mediaId: String, source: MediaSource): MediaInfo? {
         val declared = Protocol.normalizeMimeType(source.mimeType)
-        if (declared != null) {
-            if (Protocol.isImageMimeType(declared)) {
-                info(Protocol.mediaId(messageId, declared))?.let { return it }
-            } else if (declared != "application/octet-stream") {
-                // Video, audio, and document attachments are not viewable on
-                // the watch; avoid copying their bytes into the image cache.
-                return null
-            }
-        }
+        if (declared != null && !Protocol.isImageMimeType(declared) && declared != "application/octet-stream")
+            return null
+        info(mediaId)?.let { return it }
         val bytes = readBytes(source.uri) ?: return null
         val mime = detectMime(bytes, source.mimeType)
         if (!Protocol.isImageMimeType(mime)) return null
-        val stableMime = Protocol.normalizeMimeType(source.mimeType)
-            ?.takeIf(Protocol::isImageMimeType)
-            ?: mime
-        val mediaId = Protocol.mediaId(messageId, stableMime)
-        info(mediaId)?.let { return it }
-
         val prepared = prepare(bytes, mime) ?: return null
         val fileName = mediaId + "." + extensionFor(prepared.mimeType)
         val target = File(directory, fileName)
         val temp = File(directory, "$fileName.tmp")
-        return runCatching {
-            temp.outputStream().use { out -> out.write(prepared.bytes) }
-            if (target.exists()) target.delete()
-            if (!temp.renameTo(target)) {
-                temp.copyTo(target, overwrite = true)
-                temp.delete()
-            }
-            val info = MediaInfo(
-                id = mediaId,
-                file = target,
-                mimeType = prepared.mimeType,
-                width = prepared.width,
-                height = prepared.height,
-                size = target.length(),
-                createdAt = System.currentTimeMillis()
-            )
-            synchronized(lock) {
+        return synchronized(lock) {
+            info(mediaId)?.let { return@synchronized it }
+            runCatching {
+                temp.outputStream().use { out -> out.write(prepared.bytes) }
+                if (target.exists()) target.delete()
+                if (!temp.renameTo(target)) {
+                    temp.copyTo(target, overwrite = true)
+                    temp.delete()
+                }
+                val info = MediaInfo(
+                    id = mediaId,
+                    file = target,
+                    mimeType = prepared.mimeType,
+                    width = prepared.width,
+                    height = prepared.height,
+                    size = target.length(),
+                    createdAt = System.currentTimeMillis()
+                )
                 records[mediaId] = info
                 prefs.edit().putString(KEY_PREFIX + mediaId, encodeRecord(info)).apply()
-            }
-            info
-        }.onFailure {
-            Log.w(TAG, "Unable to cache media for $messageId", it)
-            temp.delete()
-        }.getOrNull()
+                info
+            }.onFailure {
+                Log.w(TAG, "Unable to cache media $mediaId", it)
+                temp.delete()
+            }.getOrNull()
+        }
     }
 
     private fun readBytes(uri: Uri): ByteArray? = runCatching {
@@ -327,15 +293,6 @@ class MediaCache(context: Context) {
         if (ownsCandidate) candidate.recycle()
         return null
     }
-
-    private fun WireMessage.withMedia(info: MediaInfo): WireMessage = copy(
-        attachment = true,
-        mediaId = info.id,
-        mediaMime = info.mimeType,
-        mediaWidth = info.width,
-        mediaHeight = info.height,
-        mediaSize = info.size
-    )
 
     private fun loadRecords(): MutableMap<String, MediaInfo> {
         val loaded = mutableMapOf<String, MediaInfo>()

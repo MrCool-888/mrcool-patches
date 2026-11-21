@@ -82,11 +82,13 @@ Both switches default to on. Tap **Restart OpenBubbles** after changing either s
 
 ### OpenBubbles compatibility
 
-The current OpenBubbles patches require the native ARM64 build **2.0.0, version code 20002293**. The version name alone is insufficient: build 20002289 is an earlier, unsupported target for the current source. Older patch releases retain their original build requirements.
+The current OpenBubbles patches target **2.0.0, version code 20002296** on ARM64 and ARMv7. For a 64-bit-only phone, use the ARM64 app bundle with its matching ABI and density splits. Older patch releases retain their original build requirements.
 
-The supplied single phone APK updates our existing patched universal installation in place using the same signing key. Do not uninstall or clear app data. A stock Play Store installation has a different signature and cannot receive this APK as an in-place update. See [build 2293 validation](docs/VALIDATION-OPENBUBBLES-2293.md).
+The signed single phone APK updates our existing patched installation in place using the same signing key. A stock installation must use its original signer for an in-place update.
 
 The Wear companion bridge sends watch notifications while the phone is locked and synchronizes dismissal of matching phone and watch notifications. To check the connection, select the Wear companion bridge in Morphe and tap **Send test notification** at the bottom of OpenBubbles Settings → Morphe patches. The test does not send a real message.
+
+The bridge serves each image in a photo collection on demand. OpenBubbles Wear 3.2.0-dev.3 adds the collection viewer.
 
 The Icon Pack Studio patch unlocks Pro on **2.5 build 005** (version code 250050). It forces the
 app's paid-state check and hides the community `Get Pro` upsell without touching stored
@@ -125,10 +127,8 @@ The checked-in `openbubbles-wear.mpe` contains the bridge and its added dependen
 excludes stock app classes. A source digest and artifact checksum reject stale or modified binaries.
 The original APK, derived host class fixture, signing material, and device data are not stored here.
 Changing the bridge requires a local rebuild with JDK 17 and the compile-only stock-derived fixture at
-`integrations/openbubbles/work/openbubbles-classes-v52.jar` (SHA-256
-`188711da1d45c04cb5fb9d15b58f8cdcb8ca60a38cca299e3e92caa66a17511a`).
-The fixture targets native OpenBubbles 2.0.0 / 20002293 ARM64, base APK SHA-256
-`340e8a7ecc6e8bfe07e3c563c4212e9dc481f1dad9e8ad5188e24066bb128253`.
+`integrations/openbubbles/work/openbubbles-classes-v52.jar`. Derive it from the
+OpenBubbles 2.0.0 build 20002296 base APK using the integration instructions.
 It is a developer input and must remain local. See the integration README for extraction and checks.
 
 ```sh

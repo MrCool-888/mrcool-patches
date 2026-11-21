@@ -9,6 +9,18 @@ import app.morphe.patcher.patch.resourcePatch
 
 internal const val SERVICE_CLASS = "Lcom/openbubbles/wear/bridge/WearBridgeService;"
 private const val MEDIA_PROVIDER_CLASS = "Lcom/openbubbles/wear/patch/CompanionMediaProvider;"
+private const val OPENBUBBLES_PACKAGE = "com.openbubbles.messaging"
+private const val OPENBUBBLES_VERSION = "2.0.0"
+private const val OPENBUBBLES_BUILD = 20002296
+
+internal val openBubblesCompatibility = Compatibility(
+    packageName = OPENBUBBLES_PACKAGE,
+    name = "OpenBubbles",
+    targets = listOf(AppTarget(
+        version = OPENBUBBLES_VERSION,
+        versionCodes = mapOf(SupportedAbi.ARM64_V8A to OPENBUBBLES_BUILD, SupportedAbi.ARMEABI_V7A to OPENBUBBLES_BUILD),
+    )),
+)
 
 private val verifyBackendPatch = bytecodePatch {
     execute {
@@ -62,13 +74,7 @@ val openBubblesWearBridgePatch = bytecodePatch(
     name = "Wear companion bridge",
     description = "Embeds the Wear companion in OpenBubbles and includes a background notification control; no separate phone app is needed.",
 ) {
-    compatibleWith(
-        Compatibility(
-            packageName = "com.openbubbles.messaging",
-            name = "OpenBubbles",
-            targets = listOf(AppTarget(version = "2.0.0", versionCodes = mapOf(SupportedAbi.ARM64_V8A to 20002293))),
-        ),
-    )
+    compatibleWith(openBubblesCompatibility)
     // Check the original backend before extension merging can mask missing classes.
     dependsOn(bridgeManifestPatch)
     execute {
@@ -101,13 +107,7 @@ val readyNotificationSettingsPatch = bytecodePatch(
     name = "Ready for messages notification control",
     description = "Adds a setting to hide or show the background connection notification independently of the Wear bridge.",
 ) {
-    compatibleWith(
-        Compatibility(
-            packageName = "com.openbubbles.messaging",
-            name = "OpenBubbles",
-            targets = listOf(AppTarget(version = "2.0.0", versionCodes = mapOf(SupportedAbi.ARM64_V8A to 20002293))),
-        ),
-    )
+    compatibleWith(openBubblesCompatibility)
     dependsOn(sharedSettingsPatch)
 }
 
@@ -116,8 +116,8 @@ private fun app.morphe.patcher.patch.BytecodePatchContext.requireSupportedVersio
 }
 
 internal fun requireSupportedVersion(packageName: String, versionName: String, versionCode: String) {
-    if (packageName != "com.openbubbles.messaging" || versionName != "2.0.0" || versionCode != "20002293") {
-        throw PatchException("Unsupported app: $packageName $versionName ($versionCode); expected native OpenBubbles 2.0.0 (20002293)")
+    if (packageName != OPENBUBBLES_PACKAGE || versionName != OPENBUBBLES_VERSION || versionCode != OPENBUBBLES_BUILD.toString()) {
+        throw PatchException("Unsupported app: $packageName $versionName ($versionCode); expected OpenBubbles $OPENBUBBLES_VERSION ($OPENBUBBLES_BUILD)")
     }
 }
 
@@ -177,8 +177,14 @@ internal val REQUIRED_BACKEND_METHODS = mapOf(
         "getContentFlow()Lkotlinx/coroutines/flow/StateFlow;",
         "getDeliveryStateFlow()Lkotlinx/coroutines/flow/StateFlow;",
         "react(Lcom/localob/messaging/backend/domain/ReactionKind;IZLkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+        "unsend(ILkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+        "canUnsend(Lkotlinx/datetime/Instant;)Z",
+        "getRetractedPartsFlow()Lkotlinx/coroutines/flow/StateFlow;",
         "getThreadOriginatorGuid()Ljava/lang/String;",
         "getThreadOriginatorPartIndex()Ljava/lang/Integer;",
+    ),
+    "Lcom/localob/messaging/app/messaging/MessagePartsKt;" to listOf(
+        "groupContentRuns(Ljava/util/List;)Ljava/util/List;",
     ),
     "Lcom/localob/messaging/backend/db/Message;" to listOf(
         "getGuid()Ljava/lang/String;", "getId()J", "getText()Ljava/lang/String;",
@@ -200,6 +206,10 @@ internal val REQUIRED_BACKEND_METHODS = mapOf(
         "<init>(Ljava/util/List;Ljava/util/List;Lcom/localob/messaging/backend/domain/BalloonContent;Lcom/localob/messaging/backend/domain/MessageRef;Lcom/localob/messaging/backend/domain/MessageEffect;Ljava/lang/String;Z)V",
         "getRuns()Ljava/util/List;",
     ),
+    "Lcom/localob/messaging/backend/domain/ContentRun\$AttachmentRef;" to listOf(
+        "getAttachment()Lcom/localob/messaging/backend/domain/Attachment;",
+    ),
+    "Lcom/localob/messaging/backend/domain/Attachment;" to listOf("getGuid()Ljava/lang/String;"),
     "Lcom/localob/messaging/backend/domain/MessageRef;" to listOf(
         "<init>(Ljava/lang/String;Ljava/lang/Integer;)V",
     ),

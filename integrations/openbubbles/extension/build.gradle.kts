@@ -147,7 +147,7 @@ val compileExtensionDex by tasks.registering(JavaExec::class) {
     doFirst {
         extensionDexDirectory.get().asFile.mkdirs()
         args(
-            "--release", "--min-api", "32",
+            "--release", "--min-api", "29",
             "--lib", androidJar.get(),
             "--classpath", appClassesJar.get().absolutePath,
             "--classpath", morpheCli.get().asFile.absolutePath,

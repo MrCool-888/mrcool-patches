@@ -13,17 +13,24 @@ import com.localob.messaging.backend.db.Attachment;
 import com.localob.messaging.backend.db.Attachment_;
 import com.localob.messaging.backend.db.Database;
 import com.localob.messaging.backend.db.Message;
+import com.localob.messaging.backend.domain.ContentRun;
+import com.localob.messaging.backend.domain.MessageContent;
 
 import io.objectbox.query.Query;
 import io.objectbox.query.QueryBuilder;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /** Only the pinned companion can read backend images; a first read downloads them. */
@@ -198,26 +205,45 @@ public final class CompanionMediaProvider extends ContentProvider {
     }
 
     static void putMedia(JSONObject out, Message message) {
+        long messageId = message.getId();
+        if (messageId == 0L || message.getDateDeleted() != null) return;
         try (Query<Attachment> query = Database.INSTANCE.getAttachments().query()
-                .equal(Attachment_.messageId, message.getId()).build()) {
-            // shortcut: one image per message; extend the wire model for galleries.
-            for (Attachment attachment : query.find(0, 16)) {
-                try {
-                    String mime = imageMime(attachment.getMimeType());
-                    if (mime == null) continue;
-                    Message owner = attachment.getMessage().getTarget();
-                    if (owner == null || owner.getDateDeleted() != null) continue;
-                    // Expose the image even before it is downloaded; the provider
-                    // fetches it on the first watch read.
-                    out.put("mediaUri", uriFor(attachment.getGuid()).toString());
-                    out.put("mediaMime", mime);
-                    return;
-                } catch (Exception ignored) {
-                    // Non-image or detached attachments stay placeholders.
+                .equal(Attachment_.messageId, messageId).order(Attachment_.id).build()) {
+            Map<String, String> photos = new LinkedHashMap<>();
+            for (Attachment attachment : query.find()) {
+                String guid = attachment.getGuid();
+                String mime = imageMime(attachment.getMimeType());
+                if (mime == null || !validAttachmentGuid(guid)) continue;
+                Message owner = attachment.getMessage().getTarget();
+                if (owner != null && owner.getId() == messageId && owner.getDateDeleted() == null) {
+                    photos.putIfAbsent(guid, mime);
                 }
             }
+            if (photos.isEmpty()) return;
+
+            Set<String> order = new LinkedHashSet<>();
+            try {
+                MessageContent content = message.getContentFlow().getValue();
+                if (content != null) {
+                    for (ContentRun run : content.getRuns()) {
+                        if (run instanceof ContentRun.AttachmentRef) {
+                            order.add(((ContentRun.AttachmentRef) run).getAttachment().getGuid());
+                        }
+                    }
+                }
+            } catch (RuntimeException e) {
+                Log.d("OBWearPatch", "Using database attachment order", e);
+            }
+            order.addAll(photos.keySet());
+            JSONArray attachments = new JSONArray();
+            for (String guid : order) {
+                String mime = photos.get(guid);
+                if (mime != null) attachments.put(new JSONObject()
+                        .put("mediaUri", uriFor(guid).toString()).put("mediaMime", mime));
+            }
+            out.put("attachments", attachments);
         } catch (Throwable t) {
-            Log.d("OBWearPatch", "Downloaded attachment unavailable", t);
+            Log.d("OBWearPatch", "Attachment metadata unavailable", t);
         }
     }
 

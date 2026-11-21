@@ -2,11 +2,8 @@ package com.openbubbles.wear.patches
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
-import app.morphe.patcher.patch.AppTarget
 import app.morphe.patcher.patch.BytecodePatchContext
-import app.morphe.patcher.patch.Compatibility
 import app.morphe.patcher.patch.PatchException
-import app.morphe.patcher.patch.SupportedAbi
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.patch.resourcePatch
 import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
@@ -58,13 +55,7 @@ val classicReplyMenuPatch = bytecodePatch(
     description = "Adds inline replies and a separate swipe direction switch in OpenBubbles Settings → Morphe patches.",
     default = false,
 ) {
-    compatibleWith(
-        Compatibility(
-            packageName = "com.openbubbles.messaging",
-            name = "OpenBubbles",
-            targets = listOf(AppTarget(version = "2.0.0", versionCodes = mapOf(SupportedAbi.ARM64_V8A to 20002293))),
-        ),
-    )
+    compatibleWith(openBubblesCompatibility)
     dependsOn(sharedSettingsPatch, classicReplyManifestPatch)
     execute { addClassicReplyHooks() }
 }
@@ -119,7 +110,7 @@ private fun BytecodePatchContext.addClassicReplyHooks() {
     """.trimIndent())
 
     val transcript = chat.methods.single { it.name == "ConversationViewBody\$lambda\$81\$3\$0\$1\$1\$5\$0\$0\$3" }
-    val nativeSwipe = "${CONVERSATION.dropLast(1)}\$\$ExternalSyntheticLambda132;-><init>($MUTABLE_STATE)V"
+    val nativeSwipe = "${CONVERSATION.dropLast(1)}\$\$ExternalSyntheticLambda154;-><init>($MUTABLE_STATE)V"
     val transcriptInstructions = transcript.implementation!!.instructions
     val swipeConstructor = transcriptInstructions.indices.singleOrNull {
         (transcriptInstructions[it] as? ReferenceInstruction)?.reference.toString() == nativeSwipe
@@ -141,7 +132,7 @@ private fun BytecodePatchContext.addClassicReplyHooks() {
     val bubble = chat.methods.single { it.name == "MessageBubble-4u75S8o" }
     val bubbleInstructions = bubble.implementation!!.instructions
     // Mark the remembered actions for single and grouped message parts.
-    for (lambda in listOf(156, 141)) {
+    for (lambda in listOf(162, 148)) {
         val actionConstructor = "${CONVERSATION.dropLast(1)}\$\$ExternalSyntheticLambda$lambda;-><init>($FUNCTION1${MESSAGE}I)V"
         val index = bubbleInstructions.indices.singleOrNull {
             (bubbleInstructions[it] as? ReferenceInstruction)?.reference.toString() == actionConstructor

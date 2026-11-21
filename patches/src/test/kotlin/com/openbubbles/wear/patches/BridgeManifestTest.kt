@@ -14,7 +14,7 @@ class BridgeManifestTest {
     }.newDocumentBuilder().parse(
         """
         <manifest xmlns:android="$ANDROID_NS" package="com.openbubbles.messaging"
-            android:versionName="2.0.0" android:versionCode="20002293">
+            android:versionName="2.0.0" android:versionCode="20002296">
             $queries
             <application android:name="com.localob.messaging.shell.ShellApplication">
                 <receiver android:name="private.Receiver" android:exported="false"/>
@@ -128,13 +128,13 @@ class BridgeManifestTest {
     }
 
     @Test fun `rejects wrong package version and version code even if compatibility is forced`() {
-        requireSupportedVersion("com.openbubbles.messaging", "2.0.0", "20002293")
+        requireSupportedVersion("com.openbubbles.messaging", "2.0.0", "20002296")
         listOf(
-            Triple("com.example.other", "2.0.0", "20002293"),
-            Triple("com.openbubbles.messaging", "2.0.1", "20002293"),
-            Triple("com.openbubbles.messaging", "2.0.0", "20002289"),
-            Triple("com.openbubbles.messaging", "2.0.0", "020002293"),
-            Triple("com.openbubbles.messaging", "2.0.0 ", "20002293"),
+            Triple("com.example.other", "2.0.0", "20002296"),
+            Triple("com.openbubbles.messaging", "2.0.1", "20002296"),
+            Triple("com.openbubbles.messaging", "2.0.0", "20002293"),
+            Triple("com.openbubbles.messaging", "2.0.0", "020002296"),
+            Triple("com.openbubbles.messaging", "2.0.0 ", "20002296"),
         ).forEach { (name, version, code) ->
             assertFailsWith<PatchException> { requireSupportedVersion(name, version, code) }
         }

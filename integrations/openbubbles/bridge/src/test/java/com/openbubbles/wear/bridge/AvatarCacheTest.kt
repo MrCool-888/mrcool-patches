@@ -12,10 +12,12 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [32], application = Application::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class AvatarCacheTest {
     private lateinit var context: Application
     private lateinit var source: File
@@ -48,6 +50,21 @@ class AvatarCacheTest {
         assertEquals(first, AvatarCache.cache(context, Uri.fromFile(source)))
         image(0xff00ff00.toInt())
         assertNotEquals(first, AvatarCache.cache(context, Uri.fromFile(source)))
+    }
+
+    @Test fun groupIncludesPhotosAndChangesWhenAMembersPhotoChanges() {
+        image(0xffff0000.toInt())
+        val red = AvatarCache.cache(context, Uri.fromFile(source))!!
+        image(0xff0000ff.toInt())
+        val blue = AvatarCache.cache(context, Uri.fromFile(source))!!
+        val first = AvatarCache.group(context, listOf(AvatarCache.Member("Alex", red), AvatarCache.Member("Sam", blue)))!!
+        val info = AvatarCache.info(context, first)!!
+        assertEquals(128, info.width)
+        assertEquals(128, info.height)
+        val second = AvatarCache.group(context, listOf(AvatarCache.Member("Alex", blue), AvatarCache.Member("Sam", blue)))
+        assertNotEquals(first, second)
+        assertNull(AvatarCache.group(context, emptyList()))
+        assertNotNull(AvatarCache.group(context, List(6) { AvatarCache.Member("Person $it", if (it == 5) red else null) }))
     }
 
     @Test fun rejectsUntrustedSourcesAndInvalidIds() {

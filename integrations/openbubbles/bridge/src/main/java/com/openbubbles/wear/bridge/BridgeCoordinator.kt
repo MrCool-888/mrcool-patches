@@ -311,15 +311,7 @@ object BridgeCoordinator {
             callback(null, "Relay is paused on the phone.")
             return
         }
-        val cached = store.snapshot().firstOrNull { thread -> thread.messages.any { it.mediaId == mediaId } }
-        val message = cached?.messages?.firstOrNull { it.mediaId == mediaId }
-        val source = BridgeJson.mediaUri(message?.sourceUri)
-        if (mediaCache.info(mediaId) == null && cached != null && message != null && source != null) {
-            val enriched = mediaCache.ingest(cached, mapOf(message.id to MediaSource(source, message.mediaMime)), cached)
-            store.update(enriched)
-            publishThreadUpdate(decorate(enriched))
-        }
-        val info = AvatarCache.info(appContext, mediaId) ?: mediaCache.info(mediaId)
+        val info = AvatarCache.info(appContext, mediaId) ?: attachmentInfo(mediaId)
         if (info == null) {
             callback(null, "This photo is no longer cached on the phone.")
             return
@@ -333,6 +325,21 @@ object BridgeCoordinator {
         }
     }
 
+    private fun attachmentMessage(mediaId: String): WireMessage? =
+        store.snapshot().asSequence().flatMap { it.messages.asSequence() }
+            .firstOrNull { mediaId in it.attachmentIds }
+
+    private fun attachmentInfo(mediaId: String): MediaInfo? {
+        val message = attachmentMessage(mediaId) ?: return null
+        val info = mediaCache.info(mediaId) ?: run {
+            val photo = message.attachments.firstOrNull { it.id == mediaId }
+            val source = BridgeJson.mediaUri(photo?.sourceUri ?: message.sourceUri.takeIf { message.mediaId == mediaId })
+                ?: return null
+            mediaCache.ingest(mediaId, MediaSource(source, photo?.mimeType ?: message.mediaMime))
+        }
+        // History can retract an attachment while its bytes are downloading.
+        return info?.takeIf { prefs.relayEnabled && attachmentMessage(mediaId) != null }
+    }
 
     private fun storeBridgeThread(thread: WireThread): WireThread {
         val address = Protocol.normalizeAddress(thread.address)
@@ -387,6 +394,36 @@ object BridgeCoordinator {
             val message = BridgeJson.message(reply.json?.optJSONObject("message"), request.threadId)
             thread?.let { publishThreadUpdate(decorate(it)) }
             complete(null, thread?.messages?.firstOrNull { it.id == request.messageId } ?: message)
+        }
+    }
+
+    fun unsend(request: UnsendRequest, callback: (ActionResult) -> Unit) {
+        fun complete(error: String?, message: WireMessage? = null) = callback(ActionResult(
+            requestId = request.requestId, action = Protocol.ACTION_UNSEND,
+            ok = error == null, threadId = request.threadId, error = error, message = message))
+        if (!initialized || !prefs.relayEnabled) {
+            complete("Enable the Wear bridge in OpenBubbles first.")
+            return
+        }
+        if (!Protocol.isChatGuid(request.threadId) || request.messageId.isBlank() ||
+            request.messageId.length > 512 || request.messageId.any(Char::isISOControl)) {
+            complete("Invalid unsend target.")
+            return
+        }
+        val fields = JSONObject().put("requestId", request.requestId).put("threadId", request.threadId)
+            .put("messageId", request.messageId)
+        PatchBridgeClient.request(appContext, "unsend", fields, 28_000) { reply ->
+            if (!reply.ok) {
+                complete(reply.error ?: "Could not unsend the message. Refresh before trying again.")
+                return@request
+            }
+            val message = BridgeJson.message(reply.json?.optJSONObject("message"), request.threadId)
+                ?.takeIf { it.id == request.messageId && it.unsent }
+            if (message != null) store.mergeHistory(request.threadId, listOf(message))
+            val thread = BridgeJson.thread(reply.json?.optJSONObject("thread"))
+                ?.takeIf { it.id == request.threadId }?.let(::storeBridgeThread)
+            thread?.let { publishThreadUpdate(decorate(it)) }
+            complete(null, message)
         }
     }
 
@@ -524,7 +561,7 @@ object BridgeCoordinator {
         if (!prefs.relayEnabled) return
         threads.forEach { WatchLink.putThread(appContext, it) }
         WatchLink.pruneThreads(appContext, threads.map { it.id }.toSet())
-        val mediaIds = threads.flatMap { it.messages.mapNotNull { message -> message.mediaId } }.toSet()
+        val mediaIds = threads.flatMap { thread -> thread.messages.flatMap { it.attachmentIds } }.toSet()
         mediaCache.prune(mediaIds)
         WatchLink.pruneMedia(appContext, mediaIds + AvatarCache.ids(appContext))
         prefs.lastPublishAt = System.currentTimeMillis()

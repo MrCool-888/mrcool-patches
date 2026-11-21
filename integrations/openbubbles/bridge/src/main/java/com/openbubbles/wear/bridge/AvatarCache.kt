@@ -5,6 +5,12 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.BitmapShader
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.Shader
 import android.net.Uri
 import android.provider.ContactsContract
 import java.io.ByteArrayOutputStream
@@ -13,6 +19,8 @@ import java.io.FileInputStream
 import java.security.MessageDigest
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlin.math.cos
+import kotlin.math.sin
 
 /** Small app-private cache of normalized contact thumbnails. */
 object AvatarCache {
@@ -59,21 +67,77 @@ object AvatarCache {
             } finally {
                 scaled.recycle()
             }
-            val id = "avatar-" + MessageDigest.getInstance("SHA-256").digest(prepared).joinToString("") { "%02x".format(it) }
-            val dir = directory(app)
-            synchronized(lock) {
-                dir.mkdirs()
-                val target = File(dir, "$id.jpg")
-                if (!target.isFile) {
-                    val temp = File(dir, "$id.tmp")
-                    temp.writeBytes(prepared)
-                    if (!temp.renameTo(target)) { temp.delete(); return null }
-                }
-                target.setLastModified(System.currentTimeMillis())
-                prune(dir, target)
-            }
-            id
+            store(app, prepared)
         }.getOrNull()
+    }
+
+    data class Member(val name: String, val avatarId: String?)
+
+    fun group(context: Context, members: List<Member>): String? {
+        if (members.isEmpty()) return null
+        return runCatching {
+            val sorted = members.sortedByDescending { it.avatarId != null }.take(4)
+            val bitmap = Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888)
+            try {
+                val canvas = Canvas(bitmap)
+                canvas.drawColor(Color.rgb(48, 50, 55))
+                val count = sorted.size
+                val diameter = (1f - count * 0.07f) * 128f * 0.65f
+                val orbit = (128f - (1f - count * 0.07f) * 64f - 20.48f) / 2f
+                val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+                sorted.forEachIndexed { index, member ->
+                    val angle = index.toDouble() / count * Math.PI * 2 + Math.PI * 1.25
+                    val x = 64f - orbit * cos(angle).toFloat()
+                    val y = 64f + orbit * sin(angle).toFloat()
+                    val extra = index == 3 && members.size > 4
+                    val photo = if (extra) null else member.avatarId?.let { info(context, it) }
+                        ?.let { BitmapFactory.decodeFile(it.file.path) }
+                    if (photo != null) {
+                        try {
+                            val scale = diameter / minOf(photo.width, photo.height)
+                            val matrix = Matrix().apply {
+                                setScale(scale, scale)
+                                postTranslate(x - photo.width * scale / 2, y - photo.height * scale / 2)
+                            }
+                            paint.shader = BitmapShader(photo, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
+                                setLocalMatrix(matrix)
+                            }
+                            canvas.drawCircle(x, y, diameter / 2, paint)
+                            paint.shader = null
+                        } finally { photo.recycle() }
+                    } else {
+                        paint.color = Color.rgb(82, 86, 94)
+                        canvas.drawCircle(x, y, diameter / 2, paint)
+                        paint.color = Color.WHITE
+                        paint.textSize = diameter * 0.36f
+                        paint.textAlign = Paint.Align.CENTER
+                        val initials = member.name.trim().split(Regex("\\s+"))
+                            .filter { it.isNotBlank() }.take(2).joinToString("") { it.take(1) }.uppercase()
+                        canvas.drawText(if (extra) "+${members.size - 3}" else initials.ifEmpty { "?" },
+                            x, y - (paint.ascent() + paint.descent()) / 2, paint)
+                    }
+                }
+                val bytes = ByteArrayOutputStream().apply { bitmap.compress(Bitmap.CompressFormat.JPEG, 82, this) }
+                store(context, bytes.toByteArray())
+            } finally { bitmap.recycle() }
+        }.getOrNull()
+    }
+
+    private fun store(context: Context, prepared: ByteArray): String? {
+        val id = "avatar-" + MessageDigest.getInstance("SHA-256").digest(prepared).joinToString("") { "%02x".format(it) }
+        val dir = directory(context)
+        synchronized(lock) {
+            dir.mkdirs()
+            val target = File(dir, "$id.jpg")
+            if (!target.isFile) {
+                val temp = File(dir, "$id.tmp")
+                temp.writeBytes(prepared)
+                if (!temp.renameTo(target)) { temp.delete(); return null }
+            }
+            target.setLastModified(System.currentTimeMillis())
+            prune(dir, target)
+        }
+        return id
     }
 
     fun forAddress(context: Context, address: String?): String? {
