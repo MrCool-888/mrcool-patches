@@ -1,3 +1,9 @@
+## [1.4.1-dev.2](https://github.com/MrCool-888/mrcool-patches/compare/v1.4.1-dev.1...v1.4.1-dev.2) (2026-11-22)
+
+### 🚀 Updated App Support
+
+* **OpenBubbles:** support editing messages from Wear OS ([54ffc19](https://github.com/MrCool-888/mrcool-patches/commit/54ffc19136c7aff7e6fe57af4aba1ac07ff05c41))
+
 ## [1.4.1-dev.1](https://github.com/MrCool-888/mrcool-patches/compare/v1.4.0...v1.4.1-dev.1) (2026-11-21)
 
 ### 🚀 Updated App Support
