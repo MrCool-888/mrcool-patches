@@ -114,6 +114,8 @@ internal object BridgeJson {
             canReact = json.optBoolean("canReact"),
             canReply = json.optBoolean("canReply"),
             canUnsend = json.optBoolean("canUnsend"),
+            canEdit = json.optBoolean("canEdit"),
+            editedAt = json.optLong("editedAt"),
             unsent = unsent,
             hasRetractedParts = hasRetractedParts,
             replyCount = json.optInt("replyCount", 0).coerceAtLeast(0),

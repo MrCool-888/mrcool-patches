@@ -26,6 +26,7 @@ import com.localob.messaging.backend.domain.OfferedProfile;
 import com.localob.messaging.app.messaging.MessagePartsKt;
 import com.localob.messaging.backend.domain.ReactionKind;
 import com.localob.messaging.backend.domain.RunFormat;
+import com.localob.messaging.backend.rustpush.IncomingContentMapper;
 
 import io.objectbox.query.Query;
 import io.objectbox.query.QueryCondition;
@@ -451,6 +452,85 @@ final class BridgeOps {
                     message.getDateDeletedFlow().getValue() == null && !fullyUnsent(message) &&
                     message.canUnsend(kotlinx.datetime.Instant.Companion.fromEpochMilliseconds(now));
         } catch (Throwable ignored) { return false; }
+    }
+
+    static JSONObject edit(JSONObject request) throws Exception {
+        return edit(backend(), request);
+    }
+
+    static JSONObject edit(BackendService backend, JSONObject request) throws Exception {
+        JSONObject out = baseResponse(request.optString("requestId", null));
+        if (backend == null) return notReady(out);
+        Chat chat;
+        try {
+            String messageId = request.optString("messageId", null);
+            if (blank(messageId) || messageId.length() > 512 || hasControl(messageId))
+                throw new IllegalArgumentException("Invalid message target.");
+            chat = resolve(backend, request.optString("threadId", null), null, false);
+            if (chat == null || !chat.isIMessage())
+                throw new IllegalArgumentException("Editing is unavailable for this conversation.");
+            Message target = (Message) Await.await(c -> chat.messageById(messageId, c), OP_TIMEOUT_MS);
+            if (!isMessageTarget(target, chat.getGuid()) || !messageId.equals(target.getGuid()))
+                throw new IllegalArgumentException("Message not found in this conversation.");
+            editMessage(target, request.optString("originalText", null), request.optString("text", null));
+        } catch (Throwable t) {
+            return failure(out, t);
+        }
+        out.put("ok", true).put("threadId", chat.getGuid());
+        try { out.put("thread", threadJson(chat, DEFAULT_MESSAGE_LIMIT)); }
+        catch (Throwable t) { out.put("historyUnavailable", true); }
+        return out;
+    }
+
+    static void editMessage(Message message, String originalText, String text) throws Exception {
+        if (blank(text) || text.length() > MAX_TEXT_LENGTH)
+            throw new IllegalArgumentException("Enter a message of 1–800 characters.");
+        String current = editableText(message, System.currentTimeMillis());
+        if (current == null)
+            throw new IllegalArgumentException("Only your recent plain-text iMessages can be edited from the watch.");
+        if (current.equals(text)) return;
+        if (!current.equals(originalText))
+            throw new IllegalArgumentException("This message changed. Refresh the conversation before editing it.");
+        List<ContentRun> replacement = Collections.singletonList(new ContentRun.Text(text, RunFormat.Companion.getPlain()));
+        Await.await(c -> message.edit(0, replacement, c), OP_TIMEOUT_MS);
+    }
+
+    static String editableText(Message message, long now) {
+        if (message == null) return null;
+        try {
+            long timestamp = message.getTimestamp().toEpochMilliseconds();
+            if (timestamp <= 0L || now < timestamp || !message.canEdit(kotlinx.datetime.Instant.Companion.fromEpochMilliseconds(now)))
+                return null;
+            MessageContent content;
+            if (message instanceof com.localob.messaging.backend.db.Message) {
+                com.localob.messaging.backend.db.Message entity = (com.localob.messaging.backend.db.Message) message;
+                if (entity.getDateDeleted() != null || entity.getDateScheduled() != null ||
+                        entity.getAssociatedMessageType() != null || Boolean.TRUE.equals(entity.getHasAttachments()) ||
+                        entity.getErrorMessage() != null || entity.getSendingServiceId() != null)
+                    return null;
+                String summary = entity.getDbMessageSummaryInfo();
+                JSONArray retracted = blank(summary) ? null : new JSONObject(summary).optJSONArray("retractedParts");
+                if (retracted != null && retracted.length() > 0) return null;
+                content = IncomingContentMapper.INSTANCE.toContent(entity);
+            } else {
+                if (message.getDateDeletedFlow().getValue() != null || message.getDateScheduledFlow().getValue() != null ||
+                        hasRetractedParts(message)) return null;
+                content = message.getContentFlow().getValue();
+            }
+            if (content == null || !blank(content.getSubject()) || content.getBalloon() != null ||
+                    !content.getAttachments().isEmpty()) return null;
+            List<List<ContentRun>> parts = MessagePartsKt.groupContentRuns(content.getRuns());
+            if (parts.size() != 1) return null;
+            StringBuilder text = new StringBuilder();
+            for (ContentRun run : parts.get(0)) {
+                if (!(run instanceof ContentRun.Text)) return null;
+                ContentRun.Text part = (ContentRun.Text) run;
+                if (!RunFormat.Companion.getPlain().equals(part.getFormat())) return null;
+                text.append(part.getText());
+                if (text.length() > MAX_TEXT_LENGTH) return null;
+            }
+            return blank(text.toString()) ? null : text.toString();
+        } catch (Throwable ignored) { return null; }
     }
 
     static void unsendMessage(Message message) throws Exception {
@@ -1118,9 +1198,21 @@ final class BridgeOps {
         out.put("text", bounded(text, MAX_TEXT_LENGTH));
         out.put("timestamp", timestamp);
         out.put("fromMe", fromMe);
-        out.put("canReact", !unsent && canReact(message, chatEntity));
-        out.put("canReply", !unsent && canReact(message, chatEntity));
-        out.put("canUnsend", canReact(message, chatEntity) && canUnsend(message, System.currentTimeMillis()));
+        boolean supportsActions = canReact(message, chatEntity);
+        out.put("canReact", !unsent && supportsActions);
+        out.put("canReply", !unsent && supportsActions);
+        out.put("canUnsend", supportsActions && canUnsend(message, System.currentTimeMillis()));
+        if (supportsActions && fromMe && !unsent && !attachment && text != null &&
+                text.equals(editableText(message, System.currentTimeMillis()))) out.put("canEdit", true);
+        if (!unsent) {
+            if (message instanceof com.localob.messaging.backend.db.Message) {
+                Date edited = ((com.localob.messaging.backend.db.Message) message).getDateEdited();
+                if (edited != null) out.put("editedAt", edited.getTime());
+            } else try {
+                kotlinx.datetime.Instant edited = message.getDateEditedFlow().getValue();
+                if (edited != null) out.put("editedAt", edited.toEpochMilliseconds());
+            } catch (RuntimeException ignored) { }
+        }
         out.put("unsent", unsent);
         out.put("hasRetractedParts", hasRetractedParts(message));
         out.put("reactions", reactions == null ? new JSONArray() : reactions);

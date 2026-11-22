@@ -39,7 +39,7 @@ public final class EmbeddedBackend implements EmbeddedRuntime.Backend {
             }
             if (op.equals("status") || op.equals("chats") || op.equals("thread") ||
                     op.equals("send") || op.equals("markRead") || op.equals("reaction") || op.equals("unsend") ||
-                    op.equals("reactionEvents"))
+                    op.equals("edit") || op.equals("reactionEvents"))
                 prepareBackend(!op.equals("status"));
 
             JSONObject response;
@@ -56,6 +56,7 @@ public final class EmbeddedBackend implements EmbeddedRuntime.Backend {
                     break;
                 case "reaction": response = BridgeOps.react(request); break;
                 case "unsend": response = BridgeOps.unsend(request); break;
+                case "edit": response = BridgeOps.edit(request); break;
                 case "reactionEvents":
                     response = BridgeOps.reactionEvents(request)
                             .put("hidePreview", com.localob.messaging.backend.prefs.SetupPrefs.INSTANCE.getHideTextPreviews());
@@ -72,7 +73,7 @@ public final class EmbeddedBackend implements EmbeddedRuntime.Backend {
             if (chats != null) for (int i = 0; i < chats.length(); i++) attachAvatar(chats.optJSONObject(i));
             String encoded = response.toString();
             if (encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_RESPONSE_BYTES) {
-                if ((op.equals("reaction") || op.equals("unsend")) && response.optBoolean("ok")) {
+                if ((op.equals("reaction") || op.equals("unsend") || op.equals("edit")) && response.optBoolean("ok")) {
                     response.remove("message");
                     response.remove("thread");
                     response.put("historyUnavailable", true);

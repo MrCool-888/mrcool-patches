@@ -427,6 +427,41 @@ object BridgeCoordinator {
         }
     }
 
+    fun editMessage(request: EditMessageRequest, callback: (ActionResult) -> Unit) {
+        fun complete(error: String?, message: WireMessage? = null) = callback(ActionResult(
+            requestId = request.requestId, action = Protocol.ACTION_EDIT,
+            ok = error == null, threadId = request.threadId, error = error, message = message))
+        if (!initialized || !prefs.relayEnabled) {
+            complete("Enable the Wear bridge in OpenBubbles first.")
+            return
+        }
+        if (!Protocol.isChatGuid(request.threadId) || request.messageId.isBlank() ||
+            request.messageId.length > 512 || request.messageId.any(Char::isISOControl)) {
+            complete("Invalid edit target.")
+            return
+        }
+        if (request.text.isBlank() || request.text.length > Protocol.MAX_EDIT_LENGTH ||
+            request.originalText.isBlank() || request.originalText.length > Protocol.MAX_EDIT_LENGTH) {
+            complete("Enter a message of 1–800 characters.")
+            return
+        }
+        val fields = JSONObject().put("requestId", request.requestId).put("threadId", request.threadId)
+            .put("messageId", request.messageId).put("originalText", request.originalText).put("text", request.text)
+        PatchBridgeClient.request(appContext, "edit", fields, 28_000) { reply ->
+            if (!reply.ok) {
+                complete(reply.error ?: "Could not edit the message. Refresh before trying again.")
+                return@request
+            }
+            val thread = BridgeJson.thread(reply.json?.optJSONObject("thread"))
+                ?.takeIf { it.id == request.threadId }?.let(::storeBridgeThread)
+            thread?.let { publishThreadUpdate(decorate(it)) }
+            val message = thread?.messages?.firstOrNull {
+                it.id == request.messageId && it.editedAt > 0L && it.text == request.text
+            }
+            complete(null, message)
+        }
+    }
+
     private fun recordSent(threadId: String, requestId: String, text: String, replyTo: MessageReference? = null): WireMessage {
         val message = WireMessage(id = BridgeStore.OPTIMISTIC_MESSAGE_PREFIX + requestId,
             threadId = threadId, text = text, timestamp = System.currentTimeMillis(),

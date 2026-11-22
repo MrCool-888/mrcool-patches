@@ -233,6 +233,7 @@ public class BridgeOpsTest {
                 case "getGuid": return "message-id";
                 case "getContentFlow": return flow(content);
                 case "getTimestamp": return Instant.Companion.fromEpochMilliseconds(12L);
+                case "getDateEditedFlow": return flow(Instant.Companion.fromEpochMilliseconds(42L));
                 case "isFromMe": return true;
                 case "getSender": return "s".repeat(1_000);
                 case "getDeliveryStateFlow": return flow(new DeliveryState.Failed("error".repeat(10_000)));
@@ -243,6 +244,7 @@ public class BridgeOpsTest {
         assertEquals(799, json.getString("text").length());
         assertEquals(254, json.getString("sender").length());
         assertEquals("failed", json.getString("status"));
+        assertEquals(42L, json.getLong("editedAt"));
         assertTrue(json.toString().length() < 2_000);
         assertEquals("x", BridgeOps.bounded("x😀", 2));
     }

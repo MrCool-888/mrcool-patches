@@ -125,6 +125,28 @@ class WearBridgeService : WearableListenerService() {
                             ok = false, threadId = request.threadId, error = t.message ?: "Could not unsend the message."))
                     }
                 }
+                Protocol.PATH_EDIT -> {
+                    val request = Wire.decodeBytes<EditMessageRequest>(data) ?: return
+                    val claim = ActionDedupe.claim(applicationContext, request.requestId,
+                        Protocol.ACTION_EDIT, request.threadId)
+                    if (!claim.started) {
+                        claim.result?.let { action(node, it) }
+                        return
+                    }
+                    val finished = AtomicBoolean(false)
+                    fun complete(result: ActionResult) {
+                        if (!finished.compareAndSet(false, true)) return
+                        ActionDedupe.put(applicationContext, result)
+                        ActionDedupe.end(request.requestId)
+                        action(node, result)
+                    }
+                    try {
+                        BridgeCoordinator.editMessage(request, ::complete)
+                    } catch (t: Throwable) {
+                        complete(ActionResult(requestId = request.requestId, action = Protocol.ACTION_EDIT,
+                            ok = false, threadId = request.threadId, error = t.message ?: "Could not edit the message."))
+                    }
+                }
                 Protocol.PATH_MARK_READ -> {
                     val request = Wire.decodeBytes<MarkReadRequest>(data) ?: return
                     BridgeCoordinator.markReadDirect(request.threadId) { error ->
