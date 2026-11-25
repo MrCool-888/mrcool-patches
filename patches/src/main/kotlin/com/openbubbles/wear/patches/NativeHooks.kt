@@ -3,6 +3,7 @@ package com.openbubbles.wear.patches
 import app.morphe.patcher.patch.BytecodePatchContext
 import app.morphe.patcher.patch.PatchException
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
+import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
 import app.morphe.patcher.util.smali.ExternalLabel
 import app.morphe.patcher.util.proxy.mutableTypes.MutableClass
 import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
@@ -18,6 +19,7 @@ import com.android.tools.smali.dexlib2.iface.instruction.Instruction
 import com.android.tools.smali.dexlib2.iface.instruction.RegisterRangeInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.formats.Instruction35c
+import com.android.tools.smali.dexlib2.iface.instruction.formats.Instruction3rc
 import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 import com.android.tools.smali.dexlib2.immutable.reference.ImmutableMethodReference
 
@@ -25,6 +27,33 @@ private const val APPLICATION = "Lcom/localob/messaging/app/LocalObApplication;"
 private const val NOTIFICATIONS = "Lcom/localob/messaging/app/notifications/ChatNotifications;"
 private const val NOTIFICATION_MANAGER = "Landroidx/core/app/NotificationManagerCompat;"
 private const val EMBEDDED_HOOKS = "Lcom/openbubbles/wear/patch/EmbeddedHooks;"
+
+internal fun BytecodePatchContext.addSendTimeoutRetry() {
+    val rust = "Lcom/localob/messaging/backend/rust/"
+    val parameters = listOf("${rust}SharedPushStateHandle;", "${rust}MessageInst;", "Lkotlin/coroutines/Continuation;")
+    val nativeSend = ImmutableMethodReference("${rust}Rust_bridge_androidKt;", "sendMessage", parameters, "Ljava/lang/Object;")
+    val retry = ImmutableMethodReference("Lcom/openbubbles/wear/patch/NativeSendRetry;",
+        nativeSend.name, parameters, nativeSend.returnType)
+    if (classDefBy(retry.definingClass).methods.none { it == retry && it.accessFlags and 0x9 == 0x9 }) {
+        throw PatchException("Expected the native send retry hook")
+    }
+    val handover = mutableClassDefBy(
+        "Lcom/localob/messaging/backend/rustpush/OutgoingContentMapper\$sendOne\$handOver\$1;",
+    ).methods.single { signature(it) == "invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;" }
+    val instructions = handover.implementation?.instructions ?: throw PatchException("Missing native outgoing send body")
+    val index = instructions.indices.singleOrNull { (instructions[it] as? ReferenceInstruction)?.reference == nativeSend }
+        ?: throw PatchException("Expected one native send invocation in the outgoing message coroutine")
+    val invoke = instructions[index]
+    val replacement = when {
+        invoke.opcode == Opcode.INVOKE_STATIC && invoke is Instruction35c && invoke.registerCount == parameters.size ->
+            BuilderInstruction35c(invoke.opcode, invoke.registerCount, invoke.registerC, invoke.registerD,
+                invoke.registerE, invoke.registerF, invoke.registerG, retry)
+        invoke.opcode == Opcode.INVOKE_STATIC_RANGE && invoke is Instruction3rc && invoke.registerCount == parameters.size ->
+            BuilderInstruction3rc(invoke.opcode, invoke.startRegister, invoke.registerCount, retry)
+        else -> throw PatchException("Unexpected register usage in native send invocation")
+    }
+    handover.replaceInstruction(index, replacement)
+}
 
 internal fun BytecodePatchContext.skipBackendInRestartProcess() {
     val restart = "Lcom/openbubbles/wear/patch/RestartOpenBubblesActivity;"

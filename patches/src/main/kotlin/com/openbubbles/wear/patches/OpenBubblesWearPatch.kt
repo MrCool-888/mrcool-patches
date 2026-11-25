@@ -72,13 +72,14 @@ private val bridgeManifestPatch = resourcePatch {
 @Suppress("unused")
 val openBubblesWearBridgePatch = bytecodePatch(
     name = "Wear companion bridge",
-    description = "Embeds the Wear companion in OpenBubbles and includes a background notification control; no separate phone app is needed.",
+    description = "Embeds the Wear companion in OpenBubbles, adds a background notification control, and retries native iMessage send timeouts once.",
 ) {
     compatibleWith(openBubblesCompatibility)
     // Check the original backend before extension merging can mask missing classes.
     dependsOn(bridgeManifestPatch)
     execute {
         addEmbeddedHooks()
+        addSendTimeoutRetry()
         val service = classDefByOrNull(SERVICE_CLASS)
             ?: throw PatchException("Embedded WearBridgeService is missing")
         if (service.superclass != "Lcom/google/android/gms/wearable/WearableListenerService;") {

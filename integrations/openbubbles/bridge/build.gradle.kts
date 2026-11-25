@@ -25,6 +25,10 @@ android {
 dependencies {
     implementation(project(":protocol"))
     implementation("com.google.android.gms:play-services-wearable:19.0.0")
+    // OpenBubbles supplies the coroutine runtime in the patched APK.
+    val coroutines = "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2"
+    compileOnly(coroutines)
+    testImplementation(coroutines)
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
 }
