@@ -11,7 +11,7 @@ Get the Morphe patch bundle from the [latest stable release](https://github.com/
 Add `https://github.com/MrCool-888/mrcool-patches` as a patch source in Morphe Manager, then select the patches you want for your app.
 
 <!-- PATCHES_START -->
-> **[v1.4.1-dev.2](https://github.com/MrCool-888/mrcool-patches/releases/tag/v1.4.1-dev.2)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;6 patches total
+> **[v1.4.1-dev.3](https://github.com/MrCool-888/mrcool-patches/releases/tag/v1.4.1-dev.3)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;6 patches total
 <details open>
 <summary>📦 OpenBubbles&nbsp;&nbsp;•&nbsp;&nbsp;3 patches</summary>
 <br>
@@ -27,7 +27,7 @@ Add `https://github.com/MrCool-888/mrcool-patches` as a patch source in Morphe M
 |----------|----------------|-----------|
 | [Classic reply menu](#classic-reply-menu) | Adds inline replies and a separate swipe direction switch in OpenBubbles Settings → Morphe patches. |  |
 | [Ready for messages notification control](#ready-for-messages-notification-control) | Adds a setting to hide or show the background connection notification independently of the Wear bridge. |  |
-| [Wear companion bridge](#wear-companion-bridge) | Embeds the Wear companion in OpenBubbles and includes a background notification control; no separate phone app is needed. |  |
+| [Wear companion bridge](#wear-companion-bridge) | Embeds the Wear companion in OpenBubbles, adds a background notification control, and retries native iMessage send timeouts once. |  |
 
 </details>
 

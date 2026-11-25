@@ -1,3 +1,9 @@
+## [1.4.1-dev.3](https://github.com/MrCool-888/mrcool-patches/compare/v1.4.1-dev.2...v1.4.1-dev.3) (2026-11-25)
+
+### 🐛 Bug Fixes
+
+* **OpenBubbles:** retry native iMessage send timeouts ([b3fceb3](https://github.com/MrCool-888/mrcool-patches/commit/b3fceb38034b3c9fe07f34b0e8ab45cf27568ad4))
+
 ## [1.4.1-dev.2](https://github.com/MrCool-888/mrcool-patches/compare/v1.4.1-dev.1...v1.4.1-dev.2) (2026-11-22)
 
 ### 🚀 Updated App Support
